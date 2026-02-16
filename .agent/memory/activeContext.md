@@ -1,8 +1,9 @@
 # Active Context: Logo Replacement
 
 ## Now
-The user wants to replace the current project logo (`public/orendtstudios_logo.png`).
+The user wants to extend the app to support multiple surveys with unique slugs (e.g., `/umfrage-1`, `/feedback-q4`).
 
 ## Next Steps
-- Clarify if a new "Orendt Studios" logo should be generated or if a file is provided.
+- Implement database schema changes (Surveys table).
+- Update Front- and Backend for dynamic routing.
 - Verify branding consistency.

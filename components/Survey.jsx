@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { getQuestions, submitResponse } from "@/lib/supabase"
-import { DEFAULT_QUESTIONS } from "@/lib/defaults"
+import { getQuestions, submitResponse, getSurveyBySlug } from "@/lib/supabase"
 
 // ─── Sub-components ───────────────────────────────
 
@@ -98,10 +97,6 @@ function TextInput({ value, onChange, placeholder }) {
   )
 }
 
-// ─── Logo ───────────────────────────────────
-
-// ─── Logo ───────────────────────────────────
-
 function OrendtLogo() {
   return (
     <div className="h-10 px-4 py-2 bg-orendt-black rounded-lg flex items-center justify-center">
@@ -109,6 +104,13 @@ function OrendtLogo() {
         src="/orendtstudios_logo.png"
         alt="Orendt Studios"
         className="h-full w-auto object-contain"
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.style.display = 'none';
+          e.target.parentNode.innerText = 'ORENDT';
+          e.target.parentNode.style.color = 'white';
+          e.target.parentNode.style.fontWeight = 'bold';
+        }}
       />
     </div>
   )
@@ -116,28 +118,58 @@ function OrendtLogo() {
 
 // ─── Main Survey ───────────────────────────────────
 
-export default function Survey() {
+export default function Survey({ slug }) {
+  const [survey, setSurvey] = useState(null)
   const [questions, setQuestions] = useState([])
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [animKey, setAnimKey] = useState(0)
   const [slideDir, setSlideDir] = useState("right")
 
   useEffect(() => {
     async function load() {
-      const { data } = await getQuestions()
-      if (data && data.length > 0) {
-        setQuestions(data)
-      } else {
-        setQuestions(DEFAULT_QUESTIONS)
+      // 1. Fetch Survey
+      if (!slug) {
+        setError("Keine Umfrage angegeben.")
+        setLoading(false)
+        return
       }
+
+      const { data: surveyData, error: surveyError } = await getSurveyBySlug(slug)
+
+      if (surveyError || !surveyData) {
+        setError("Umfrage nicht gefunden.")
+        setLoading(false)
+        return
+      }
+
+      setSurvey(surveyData)
+
+      if (!surveyData.is_active) {
+        setError("Diese Umfrage ist nicht mehr aktiv.")
+        setLoading(false)
+        return
+      }
+
+      // 2. Fetch Questions
+      const { data: questionsData, error: questionsError } = await getQuestions(surveyData.id)
+
+      if (questionsError) {
+        setError("Fehler beim Laden der Fragen.")
+      } else if (questionsData && questionsData.length > 0) {
+        setQuestions(questionsData)
+      } else {
+        setError("Keine Fragen in dieser Umfrage gefunden.")
+      }
+
       setLoading(false)
     }
     load()
-  }, [])
+  }, [slug])
 
   const q = questions[currentQ]
 
@@ -168,7 +200,8 @@ export default function Survey() {
   const canProceed = () => {
     if (!q) return false
     const a = answers[q.id]
-    if (q.type === "text" || q.type === "rating") return true
+    if (!q.is_required) return true
+    if (q.type === "text" || q.type === "rating") return !!a // Simple check, could be more robust
     if (q.type === "multiple") return a && a.length > 0
     return !!a
   }
@@ -180,7 +213,7 @@ export default function Survey() {
       setCurrentQ((c) => c + 1)
     } else {
       setSubmitting(true)
-      await submitResponse(answers)
+      await submitResponse(survey.id, answers)
       setSubmitted(true)
       setSubmitting(false)
     }
@@ -199,6 +232,18 @@ export default function Survey() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="text-center">
+          <p className="text-red-500 font-bold mb-4">{error}</p>
+          <a href="/" className="text-sm underline">Zur Startseite</a>
+        </div>
       </div>
     )
   }
@@ -268,10 +313,13 @@ export default function Survey() {
           <h2 className="font-display text-2xl md:text-3xl font-bold text-orendt-black mb-2 leading-tight tracking-tight">
             {q.question}
           </h2>
+          {/* Survey Title Context */}
+          <p className="text-xs uppercase text-orendt-gray-400 mb-4 tracking-widest">{survey.title}</p>
+
           {q.subtitle && (
             <p className="text-sm text-orendt-gray-500 mb-6">{q.subtitle}</p>
           )}
-          {!q.subtitle && <div className="mb-8" />}
+          {!q.subtitle && <div className="mb-6" />}
 
           {/* Answer Area */}
           {q.type === "single" && (
@@ -379,7 +427,7 @@ export default function Survey() {
       <footer className="px-6 py-4 border-t border-orendt-gray-200 flex items-center justify-center gap-2">
         <div className="w-1.5 h-1.5 rounded-full bg-orendt-black" />
         <span className="font-display text-[10px] font-medium tracking-[0.15em] uppercase text-orendt-gray-500">
-          Mitarbeiter-Umfrage 2026
+          Orendt Studios – {survey.title}
         </span>
       </footer>
     </div>
