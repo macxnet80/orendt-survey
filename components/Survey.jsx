@@ -281,9 +281,9 @@ export default function Survey({ slug }) {
     const btnLabel = survey.start_button_label || "Jetzt starten"
 
     return (
-      <div className="min-h-screen bg-orendt-black flex flex-col overflow-hidden">
+      <div className="min-h-screen bg-orendt-black flex flex-col">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-8 md:px-14 pt-8 animate-fade-in">
+        <header className="flex items-center justify-between px-5 md:px-14 pt-6 md:pt-8 flex-shrink-0 animate-fade-in">
           <OrendtLogo />
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
@@ -294,20 +294,20 @@ export default function Survey({ slug }) {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col justify-between px-8 md:px-14 pt-12 pb-12">
+        <main className="flex-1 flex flex-col justify-between px-5 md:px-14 pt-8 md:pt-12 pb-8 md:pb-12 min-h-0">
 
           {/* Headline block */}
           <div>
             <p
-              className="font-display text-[10px] font-semibold tracking-[0.25em] uppercase text-orendt-gray-700 mb-6 animate-fade-in"
+              className="font-display text-[10px] font-semibold tracking-[0.25em] uppercase text-orendt-gray-700 mb-4 md:mb-6 animate-fade-in"
               style={{ animationDelay: "0.1s", animationFillMode: "backwards" }}
             >
               Orendt Studios — Umfrage
             </p>
 
             <h1
-              className="font-display font-bold leading-[0.92] tracking-tight uppercase text-white"
-              style={{ fontSize: "clamp(3.5rem, 12vw, 8.5rem)" }}
+              className="font-display font-bold tracking-tight uppercase text-white"
+              style={{ fontSize: "clamp(2.6rem, 14vw, 8.5rem)", lineHeight: 0.9 }}
             >
               {headlineWords.map((word, i) => (
                 <span
@@ -326,11 +326,11 @@ export default function Survey({ slug }) {
 
           {/* Bottom section */}
           <div
-            className="opacity-0 animate-slide-up"
+            className="opacity-0 animate-slide-up mt-8 md:mt-0"
             style={{ animationDelay: `${0.15 + headlineWords.length * 0.08 + 0.1}s`, animationFillMode: "forwards" }}
           >
             {/* Divider */}
-            <div className="flex items-center gap-4 mb-8">
+            <div className="flex items-center gap-4 mb-5 md:mb-8">
               <div className="h-px flex-1 bg-orendt-gray-800" />
               {questions.length > 0 && (
                 <span className="font-display text-[10px] tracking-[0.3em] uppercase text-orendt-gray-700">
@@ -339,9 +339,9 @@ export default function Survey({ slug }) {
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-end gap-8 md:gap-16">
+            <div className="flex flex-col md:flex-row md:items-end gap-5 md:gap-16">
               {descText && (
-                <p className="text-orendt-gray-400 font-body text-base leading-relaxed max-w-sm flex-1">
+                <p className="text-orendt-gray-400 font-body text-sm md:text-base leading-relaxed max-w-sm flex-1">
                   {descText}
                 </p>
               )}
@@ -349,7 +349,7 @@ export default function Survey({ slug }) {
               <div className="flex-shrink-0">
                 <button
                   onClick={() => setStarted(true)}
-                  className="group inline-flex items-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-5 rounded-full hover:scale-105 active:scale-95 transition-transform duration-200 animate-pulse"
+                  className="group w-full md:w-auto inline-flex items-center justify-center md:justify-start gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-4 md:py-5 rounded-full hover:scale-105 active:scale-95 transition-transform duration-200 animate-pulse"
                 >
                   <span>{btnLabel}</span>
                   <svg
@@ -366,7 +366,7 @@ export default function Survey({ slug }) {
         </main>
 
         {/* Bottom accent line */}
-        <div className="h-px w-full bg-orendt-accent opacity-20" />
+        <div className="h-px w-full bg-orendt-accent opacity-20 flex-shrink-0" />
       </div>
     )
   }
