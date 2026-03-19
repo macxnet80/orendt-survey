@@ -123,6 +123,7 @@ export default function Survey({ slug }) {
   const [questions, setQuestions] = useState([])
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState({})
+  const [started, setStarted] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -269,6 +270,103 @@ export default function Survey({ slug }) {
             Alle Antworten werden anonym ausgewertet.
           </p>
         </div>
+      </div>
+    )
+  }
+
+  // Landing page
+  if (!started) {
+    const headlineWords = (survey.landing_title || survey.title).toUpperCase().split(" ")
+    const descText = survey.landing_description || survey.description
+    const btnLabel = survey.start_button_label || "Jetzt starten"
+
+    return (
+      <div className="min-h-screen bg-orendt-black flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-8 md:px-14 pt-8 animate-fade-in">
+          <OrendtLogo />
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+            <span className="font-display text-[10px] font-semibold tracking-[0.2em] uppercase text-orendt-gray-500">
+              Anonym
+            </span>
+          </div>
+        </header>
+
+        {/* Main content */}
+        <main className="flex-1 flex flex-col justify-between px-8 md:px-14 pt-12 pb-12">
+
+          {/* Headline block */}
+          <div>
+            <p
+              className="font-display text-[10px] font-semibold tracking-[0.25em] uppercase text-orendt-gray-700 mb-6 animate-fade-in"
+              style={{ animationDelay: "0.1s", animationFillMode: "backwards" }}
+            >
+              Orendt Studios — Umfrage
+            </p>
+
+            <h1
+              className="font-display font-bold leading-[0.92] tracking-tight uppercase text-white"
+              style={{ fontSize: "clamp(3.5rem, 12vw, 8.5rem)" }}
+            >
+              {headlineWords.map((word, i) => (
+                <span
+                  key={i}
+                  className="block opacity-0 animate-slide-up"
+                  style={{ animationDelay: `${0.15 + i * 0.08}s`, animationFillMode: "forwards" }}
+                >
+                  {i === headlineWords.length - 1
+                    ? <span className="text-orendt-accent">{word}</span>
+                    : word
+                  }
+                </span>
+              ))}
+            </h1>
+          </div>
+
+          {/* Bottom section */}
+          <div
+            className="opacity-0 animate-slide-up"
+            style={{ animationDelay: `${0.15 + headlineWords.length * 0.08 + 0.1}s`, animationFillMode: "forwards" }}
+          >
+            {/* Divider */}
+            <div className="flex items-center gap-4 mb-8">
+              <div className="h-px flex-1 bg-orendt-gray-800" />
+              {questions.length > 0 && (
+                <span className="font-display text-[10px] tracking-[0.3em] uppercase text-orendt-gray-700">
+                  {questions.length} Fragen
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-end gap-8 md:gap-16">
+              {descText && (
+                <p className="text-orendt-gray-400 font-body text-base leading-relaxed max-w-sm flex-1">
+                  {descText}
+                </p>
+              )}
+
+              <div className="flex-shrink-0">
+                <button
+                  onClick={() => setStarted(true)}
+                  className="group inline-flex items-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-5 rounded-full hover:scale-105 active:scale-95 transition-transform duration-200 animate-pulse"
+                >
+                  <span>{btnLabel}</span>
+                  <svg
+                    width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    className="transition-transform duration-200 group-hover:translate-x-1"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {/* Bottom accent line */}
+        <div className="h-px w-full bg-orendt-accent opacity-20" />
       </div>
     )
   }
