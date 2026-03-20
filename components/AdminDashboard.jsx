@@ -688,10 +688,14 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-2xl border border-orendt-gray-200 p-5">
+    <div className="bg-white rounded-2xl border border-orendt-gray-200 p-5 h-32 flex flex-col justify-center shadow-sm hover:shadow-md transition-shadow">
       <p className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-1">{label}</p>
       <p className="text-3xl font-display font-bold text-orendt-black">{value}</p>
-      {sub && <p className="text-xs text-orendt-gray-500 mt-1">{sub}</p>}
+      {sub ? (
+        <p className="text-xs text-orendt-gray-500 mt-1">{sub}</p>
+      ) : (
+        <div className="h-4" /> /* Spacer for alignment */
+      )}
     </div>
   )
 }
@@ -1086,23 +1090,33 @@ export default function AdminDashboard() {
           </div>
 
           {loadingSurveys ? (
-            <div className="text-center py-20"><div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin inline-block" /></div>
+            <div className="text-center py-20">
+              <div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin inline-block" />
+            </div>
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
-              {surveys.map(s => (
-                <div key={s.id} className="relative group hover:shadow-lg transition-all rounded-2xl">
-                  <button onClick={() => setSelectedSurvey(s)} className="w-full bg-white p-6 rounded-2xl border border-orendt-gray-200 hover:border-orendt-black transition-all text-left">
+              {surveys.map((s) => (
+                <div key={s.id} className="relative group hover:shadow-lg transition-all rounded-2xl h-52">
+                  <button
+                    onClick={() => setSelectedSurvey(s)}
+                    className="w-full h-full bg-white p-6 rounded-2xl border border-orendt-gray-200 hover:border-orendt-black transition-all text-left flex flex-col"
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {s.is_active ? 'Aktiv' : 'Inaktiv'}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase ${
+                            s.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {s.is_active ? "Aktiv" : "Inaktiv"}
                         </span>
-
                       </div>
                     </div>
-                    <h3 className="font-display text-lg font-bold mb-1 max-w-[90%]">{s.title}</h3>
-                    <p className="text-sm text-orendt-gray-500 line-clamp-2 mb-4">{s.description || 'Keine Beschreibung'}</p>
-                    <div className="flex items-center gap-2 text-xs text-orendt-gray-400 font-mono bg-orendt-gray-50 p-2 rounded w-fit">
+                    <h3 className="font-display text-lg font-bold mb-1 max-w-[90%] truncate">{s.title}</h3>
+                    <p className="text-sm text-orendt-gray-500 line-clamp-2 mb-4 flex-grow">
+                      {s.description || "Keine Beschreibung"}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-orendt-gray-400 font-mono bg-orendt-gray-50 p-2 rounded w-fit mt-auto">
                       /{s.slug}
                     </div>
                   </button>
