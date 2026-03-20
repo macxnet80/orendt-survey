@@ -26,8 +26,8 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-orendt-gray-50 flex flex-col items-center justify-center p-6 bg-[url('/grid.svg')]">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-orendt-gray-100">
+    <div className="min-h-[80vh] bg-orendt-gray-50 flex flex-col items-center justify-center p-6 bg-[url('/grid.svg')]">
+      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-orendt-gray-100 my-12">
         <div className="text-center mb-10">
           <h1 className="font-display text-3xl font-bold text-orendt-black mb-2 uppercase tracking-tight">Orendt Studios</h1>
           <p className="text-orendt-gray-500 text-sm tracking-wide uppercase font-medium">Verfügbare Umfragen</p>

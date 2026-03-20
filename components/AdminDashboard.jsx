@@ -1,13 +1,18 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { QRCodeCanvas } from "qrcode.react"
+import * as XLSX from "xlsx"
+import { jsPDF } from "jspdf"
+import autoTable from "jspdf-autotable"
 import {
-  getAdminSurveys, createSurvey, updateSurvey,
+  getAdminSurveys, createSurvey, updateSurvey, deleteSurvey,
   getQuestions, createQuestion, updateQuestion, deleteQuestion,
   getResponses, deleteResponse,
-  addCurrentUserAsSurveyAdmin, getSurveyAdmins, removeSurveyAdmin,
-  signOut,
+  addCurrentUserAsSurveyAdmin, getSurveyAdmins, addSurveyAdmin, removeSurveyAdmin,
+  getAllProfiles, transferSurveyOwnership,
+  isAdminOfAnySurvey, signOut,
 } from "@/lib/supabase"
 import { useAuth } from "@/components/AuthProvider"
 
@@ -50,6 +55,9 @@ const icons = {
   eye: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
   ),
+  share: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+  ),
 }
 
 // ─── Helpers ───────────────────────────────────────
@@ -73,24 +81,13 @@ const TYPE_COLORS = {
 
 // ─── Components ───────────────────────────────────
 
-function SurveyModal({ survey, onSave, onCancel }) {
-  const [title, setTitle] = useState(survey?.title || "")
-  const [desc, setDesc] = useState(survey?.description || "")
-  const [slug, setSlug] = useState(survey?.slug || "")
-  const [landingTitle, setLandingTitle] = useState(survey?.landing_title || "")
-  const [landingDescription, setLandingDescription] = useState(survey?.landing_description || "")
-  const [startButtonLabel, setStartButtonLabel] = useState(survey?.start_button_label || "")
+function SurveyModal({ onSave, onCancel }) {
+  const [title, setTitle] = useState("")
+  const [desc, setDesc] = useState("")
 
   const handleSave = () => {
     if (!title.trim()) return
-    onSave({
-      title,
-      description: desc,
-      slug,
-      landing_title: landingTitle || null,
-      landing_description: landingDescription || null,
-      start_button_label: startButtonLabel || null,
-    })
+    onSave({ title, description: desc })
   }
 
   const inputClass = "w-full px-4 py-3 rounded-xl border-2 border-orendt-gray-200 bg-orendt-gray-50 text-sm font-body focus:outline-none focus:border-orendt-black transition-colors"
@@ -98,8 +95,8 @@ function SurveyModal({ survey, onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="font-display font-bold text-lg mb-4">{survey ? "Umfrage bearbeiten" : "Neue Umfrage erstellen"}</h3>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+        <h3 className="font-display font-bold text-lg mb-4">Neue Umfrage erstellen</h3>
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Titel</label>
@@ -108,20 +105,9 @@ function SurveyModal({ survey, onSave, onCancel }) {
               onChange={e => setTitle(e.target.value)}
               placeholder="z.B. Q3 Mitarbeiter-Feedback"
               className={inputClass}
+              autoFocus
             />
           </div>
-          {survey && (
-            <div>
-              <label className={labelClass}>URL Slug</label>
-              <input
-                value={slug}
-                onChange={e => setSlug(e.target.value)}
-                placeholder="z.B. q3-feedback"
-                className={`${inputClass} font-mono`}
-              />
-              <p className="text-[10px] text-orendt-gray-400 mt-1">Ändert die URL der Umfrage.</p>
-            </div>
-          )}
           <div>
             <label className={labelClass}>Beschreibung</label>
             <textarea
@@ -132,51 +118,13 @@ function SurveyModal({ survey, onSave, onCancel }) {
               className={`${inputClass} resize-none`}
             />
           </div>
-
-          {/* Landing Page Section */}
-          <div className="pt-2 border-t border-orendt-gray-200">
-            <p className="text-[10px] font-display font-semibold tracking-wider uppercase text-orendt-gray-400 mb-4">
-              Startseite
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className={labelClass}>Überschrift</label>
-                <input
-                  value={landingTitle}
-                  onChange={e => setLandingTitle(e.target.value)}
-                  placeholder={title || "Überschrift der Startseite"}
-                  className={inputClass}
-                />
-                <p className="text-[10px] text-orendt-gray-400 mt-1">Leer lassen = Umfrage-Titel wird verwendet.</p>
-              </div>
-              <div>
-                <label className={labelClass}>Startseiten-Text</label>
-                <textarea
-                  value={landingDescription}
-                  onChange={e => setLandingDescription(e.target.value)}
-                  placeholder="Begrüßungstext für Teilnehmer..."
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Button-Text</label>
-                <input
-                  value={startButtonLabel}
-                  onChange={e => setStartButtonLabel(e.target.value)}
-                  placeholder="Umfrage starten"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </div>
         </div>
         <div className="mt-8 flex justify-end gap-3">
           <button onClick={onCancel} className="px-5 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50">
             Abbrechen
           </button>
           <button onClick={handleSave} className="px-5 py-2.5 rounded-xl bg-orendt-black text-orendt-accent text-sm font-semibold font-display hover:opacity-90">
-            {survey ? "Speichern" : "Erstellen"}
+            Erstellen
           </button>
         </div>
       </div>
@@ -441,6 +389,303 @@ function QuestionEditor({ question, onSave, onCancel }) {
   )
 }
 
+function ShareTab({ survey }) {
+  const qrRef = useRef(null)
+  const [copied, setCopied] = useState(false)
+  const surveyUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/${survey.slug}`
+    : `/${survey.slug}`
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(surveyUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      const input = document.createElement("input")
+      input.value = surveyUrl
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand("copy")
+      document.body.removeChild(input)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleDownloadQR = () => {
+    const canvas = qrRef.current?.querySelector("canvas")
+    if (!canvas) return
+    const printCanvas = document.createElement("canvas")
+    const scale = 4
+    printCanvas.width = canvas.width * scale
+    printCanvas.height = canvas.height * scale
+    const ctx = printCanvas.getContext("2d")
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(canvas, 0, 0, printCanvas.width, printCanvas.height)
+    const link = document.createElement("a")
+    link.download = `qr-${survey.slug}.png`
+    link.href = printCanvas.toDataURL("image/png")
+    link.click()
+  }
+
+  return (
+    <div>
+      <h2 className="font-display text-xl font-bold mb-6">Umfrage teilen</h2>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Link Section */}
+        <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6">
+          <label className="block text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-3">Link</label>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-4 py-3 rounded-xl border-2 border-orendt-gray-200 bg-orendt-gray-50 text-sm font-mono text-orendt-gray-700 truncate select-all">
+              {surveyUrl}
+            </div>
+            <button
+              onClick={handleCopy}
+              className={`px-4 py-3 rounded-xl text-sm font-semibold font-display transition-all flex items-center gap-2 flex-shrink-0 ${
+                copied
+                  ? "bg-green-100 text-green-700 border-2 border-green-200"
+                  : "bg-orendt-black text-orendt-accent border-2 border-orendt-black hover:opacity-90"
+              }`}
+            >
+              {copied ? (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  Kopiert
+                </>
+              ) : (
+                <>
+                  {icons.clipboard}
+                  Kopieren
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-orendt-gray-400 mt-3">Diesen Link an Teilnehmer senden oder in Einladungen einbetten.</p>
+        </div>
+
+        {/* QR Code Section */}
+        <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6 flex flex-col items-center">
+          <label className="self-start block text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-3">QR-Code</label>
+          <div ref={qrRef} className="bg-white p-4 rounded-2xl border-2 border-orendt-gray-200">
+            <QRCodeCanvas
+              value={surveyUrl}
+              size={200}
+              level="H"
+              marginSize={2}
+              bgColor="#ffffff"
+              fgColor="#1a1a1a"
+            />
+          </div>
+          <button
+            onClick={handleDownloadQR}
+            className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+            QR-Code herunterladen
+          </button>
+          <p className="text-[11px] text-orendt-gray-400 mt-3 text-center">Druckfertig in 4x Aufloesung (PNG).</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }) {
+  const [title, setTitle] = useState(survey?.title || "")
+  const [desc, setDesc] = useState(survey?.description || "")
+  const [slug, setSlug] = useState(survey?.slug || "")
+  const [landingTitle, setLandingTitle] = useState(survey?.landing_title || "")
+  const [landingDescription, setLandingDescription] = useState(survey?.landing_description || "")
+  const [startButtonLabel, setStartButtonLabel] = useState(survey?.start_button_label || "")
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
+
+  // Reset form when survey changes
+  useEffect(() => {
+    setTitle(survey?.title || "")
+    setDesc(survey?.description || "")
+    setSlug(survey?.slug || "")
+    setLandingTitle(survey?.landing_title || "")
+    setLandingDescription(survey?.landing_description || "")
+    setStartButtonLabel(survey?.start_button_label || "")
+  }, [survey?.id])
+
+  const handleSave = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    await onSave({
+      title,
+      description: desc,
+      slug,
+      landing_title: landingTitle || null,
+      landing_description: landingDescription || null,
+      start_button_label: startButtonLabel || null,
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const inputClass = "w-full px-4 py-3 rounded-xl border-2 border-orendt-gray-200 bg-orendt-gray-50 text-sm font-body focus:outline-none focus:border-orendt-black transition-colors"
+  const labelClass = "block text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-2"
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-display text-xl font-bold">Einstellungen</h2>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold font-display transition-all ${
+            saved
+              ? "bg-green-100 text-green-700 border-2 border-green-200"
+              : "bg-orendt-black text-orendt-accent border-2 border-orendt-black hover:opacity-90"
+          }`}
+        >
+          {saved ? (
+            <>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              Gespeichert
+            </>
+          ) : (
+            <>
+              {icons.save}
+              {saving ? "Speichert..." : "Speichern"}
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="space-y-6">
+        {/* Status Toggle */}
+        <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6">
+          <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-4">Status</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-orendt-black">
+                {survey.is_active ? "Umfrage ist aktiv" : "Umfrage ist deaktiviert"}
+              </p>
+              <p className="text-[11px] text-orendt-gray-400 mt-0.5">
+                {survey.is_active
+                  ? "Teilnehmer koennen die Umfrage ausfuellen."
+                  : "Die Umfrage ist fuer Teilnehmer nicht sichtbar."}
+              </p>
+            </div>
+            <button
+              onClick={onToggleActive}
+              className={`
+                w-12 h-7 rounded-full transition-colors duration-200 relative flex-shrink-0
+                ${survey.is_active ? "bg-green-500" : "bg-orendt-gray-300"}
+              `}
+            >
+              <div
+                className={`
+                  w-5 h-5 rounded-full bg-white shadow-sm absolute top-1 transition-transform duration-200
+                  ${survey.is_active ? "translate-x-6" : "translate-x-1"}
+                `}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* General Settings */}
+        <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6">
+          <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-4">Allgemein</h3>
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>Titel</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="z.B. Q3 Mitarbeiter-Feedback" className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Beschreibung</label>
+              <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Kurze Beschreibung..." rows={3} className={`${inputClass} resize-none`} />
+            </div>
+            <div>
+              <label className={labelClass}>URL Slug</label>
+              <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="z.B. q3-feedback" className={`${inputClass} font-mono`} />
+              <p className="text-[10px] text-orendt-gray-400 mt-1">Aendert die URL der Umfrage.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Landing Page Settings */}
+        <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6">
+          <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500 mb-4">Startseite</h3>
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>Ueberschrift</label>
+              <textarea
+                value={landingTitle}
+                onChange={e => setLandingTitle(e.target.value)}
+                placeholder={`${title || "Ueberschrift"}\nZweite Zeile\nDritte Zeile`}
+                rows={3}
+                className={`${inputClass} resize-none font-mono`}
+              />
+              <p className="text-[10px] text-orendt-gray-400 mt-1">Jede Zeile = eine Headline-Zeile. Leer lassen = Umfrage-Titel wird verwendet.</p>
+            </div>
+            <div>
+              <label className={labelClass}>Startseiten-Text</label>
+              <textarea value={landingDescription} onChange={e => setLandingDescription(e.target.value)} placeholder="Begrüßungstext für Teilnehmer..." rows={3} className={`${inputClass} resize-none`} />
+            </div>
+            <div>
+              <label className={labelClass}>Button-Text</label>
+              <input value={startButtonLabel} onChange={e => setStartButtonLabel(e.target.value)} placeholder="Umfrage starten" className={inputClass} />
+            </div>
+          </div>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-white rounded-2xl border border-red-200 p-6">
+          <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-red-400 mb-4">Gefahrenzone</h3>
+          {responseCount > 0 ? (
+            <div>
+              <p className="text-sm text-orendt-gray-600 mb-2">
+                Diese Umfrage hat <strong>{responseCount} Antworten</strong> und kann nicht geloescht werden.
+              </p>
+              <p className="text-[11px] text-orendt-gray-400">
+                Deaktiviere die Umfrage oben, um sie fuer Teilnehmer unsichtbar zu machen.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-orendt-gray-600 mb-4">
+                Diese Umfrage hat keine Antworten und kann dauerhaft geloescht werden.
+              </p>
+              {!confirmArchive ? (
+                <button
+                  onClick={() => setConfirmArchive(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-red-200 text-sm font-semibold font-display text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  {icons.trash}
+                  Umfrage loeschen
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setConfirmArchive(false)}
+                    className="px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={onDelete}
+                    className="px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold font-display hover:bg-red-600 transition-colors"
+                  >
+                    Endgueltig loeschen
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function StatCard({ label, value, sub }) {
   return (
     <div className="bg-white rounded-2xl border border-orendt-gray-200 p-5">
@@ -489,6 +734,165 @@ function analyzeResponses(responses, questions) {
   return stats
 }
 
+function exportToExcel(responses, questions, surveyTitle) {
+  const rows = responses.map((r, i) => {
+    const row = {
+      "#": responses.length - i,
+      "Datum": new Date(r.submitted_at).toLocaleDateString("de-DE", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      }),
+    }
+    questions.forEach((q) => {
+      const val = r.answers?.[q.id]
+      if (val == null) {
+        row[q.question] = ""
+      } else if (Array.isArray(val)) {
+        row[q.question] = val.join(", ")
+      } else if (typeof val === "object") {
+        row[q.question] = Object.entries(val).map(([k, v]) => `${k}: ${v}`).join(", ")
+      } else {
+        row[q.question] = val
+      }
+    })
+    return row
+  })
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  // Auto-width columns
+  const colWidths = Object.keys(rows[0] || {}).map((key) => ({
+    wch: Math.max(key.length, ...rows.map((r) => String(r[key] || "").length)).toString().length > 50
+      ? 50
+      : Math.max(key.length + 2, ...rows.map((r) => String(r[key] || "").slice(0, 50).length + 2)),
+  }))
+  ws["!cols"] = colWidths
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Antworten")
+
+  // Summary sheet
+  const summaryRows = []
+  questions.forEach((q) => {
+    if (q.type === "single" || q.type === "multiple") {
+      const counts = {}
+      ;(q.options || []).forEach((o) => (counts[o] = 0))
+      responses.forEach((r) => {
+        const val = r.answers?.[q.id]
+        if (q.type === "single" && val && counts[val] !== undefined) counts[val]++
+        if (q.type === "multiple" && Array.isArray(val)) val.forEach((v) => { if (counts[v] !== undefined) counts[v]++ })
+      })
+      Object.entries(counts).forEach(([option, count]) => {
+        summaryRows.push({ Frage: q.question, Kategorie: q.category, Option: option, Wert: count })
+      })
+    } else if (q.type === "rating") {
+      ;(q.rating_items || []).forEach((item) => {
+        let sum = 0, count = 0
+        responses.forEach((r) => {
+          const val = r.answers?.[q.id]?.[item]
+          if (val) { sum += val; count++ }
+        })
+        summaryRows.push({ Frage: q.question, Kategorie: q.category, Option: item, Wert: count > 0 ? (sum / count).toFixed(1) : "–" })
+      })
+    }
+  })
+  if (summaryRows.length > 0) {
+    const summaryWs = XLSX.utils.json_to_sheet(summaryRows)
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Auswertung")
+  }
+
+  XLSX.writeFile(wb, `${surveyTitle || "umfrage"}-export.xlsx`)
+}
+
+function exportToPDF(responses, questions, stats, surveyTitle) {
+  const doc = new jsPDF({ orientation: "landscape" })
+  const pageWidth = doc.internal.pageSize.getWidth()
+
+  // Title
+  doc.setFontSize(18)
+  doc.text(surveyTitle || "Umfrage-Ergebnisse", 14, 20)
+  doc.setFontSize(10)
+  doc.setTextColor(120)
+  doc.text(`${responses.length} Antworten | Exportiert am ${new Date().toLocaleDateString("de-DE")}`, 14, 28)
+  doc.setTextColor(0)
+
+  let y = 38
+
+  questions.forEach((q) => {
+    const s = stats[q.id]
+    if (!s) return
+
+    // Check if we need a new page
+    if (y > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage()
+      y = 20
+    }
+
+    // Question header
+    doc.setFontSize(11)
+    doc.setFont(undefined, "bold")
+    const qLines = doc.splitTextToSize(`${q.category} — ${q.question}`, pageWidth - 28)
+    doc.text(qLines, 14, y)
+    y += qLines.length * 6 + 2
+
+    doc.setFont(undefined, "normal")
+    doc.setFontSize(9)
+
+    if (s.type === "single" || s.type === "multiple") {
+      const tableData = Object.entries(s.counts)
+        .sort(([, a], [, b]) => b - a)
+        .map(([label, count]) => [
+          label,
+          String(count),
+          s.total > 0 ? `${((count / s.total) * 100).toFixed(0)}%` : "0%",
+        ])
+      autoTable(doc, {
+        startY: y,
+        head: [["Option", "Anzahl", "Anteil"]],
+        body: tableData,
+        theme: "grid",
+        headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14, right: 14 },
+        tableWidth: "auto",
+      })
+      y = doc.lastAutoTable.finalY + 10
+    } else if (s.type === "rating") {
+      const tableData = Object.entries(s.avgs).map(([item, avg]) => [item, `${avg} / 5`])
+      autoTable(doc, {
+        startY: y,
+        head: [["Kriterium", "Durchschnitt"]],
+        body: tableData,
+        theme: "grid",
+        headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14, right: 14 },
+        tableWidth: "auto",
+      })
+      y = doc.lastAutoTable.finalY + 10
+    } else if (s.type === "text") {
+      if (s.texts.length > 0) {
+        const tableData = s.texts.map((t) => [t])
+        autoTable(doc, {
+          startY: y,
+          head: [["Antworten"]],
+          body: tableData,
+          theme: "grid",
+          headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
+          bodyStyles: { fontSize: 8 },
+          margin: { left: 14, right: 14 },
+          columnStyles: { 0: { cellWidth: "auto" } },
+        })
+        y = doc.lastAutoTable.finalY + 10
+      } else {
+        doc.text("Keine Antworten", 14, y)
+        y += 10
+      }
+    }
+  })
+
+  doc.save(`${surveyTitle || "umfrage"}-export.pdf`)
+}
+
 function SimpleBar({ label, count, total }) {
   const pct = total > 0 ? (count / total) * 100 : 0
   return (
@@ -522,15 +926,30 @@ export default function AdminDashboard() {
   const [questions, setQuestions] = useState([])
   const [responses, setResponses] = useState([])
   const [admins, setAdmins] = useState([])
+  const [allProfiles, setAllProfiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null) // null | "new" | question object
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [expandedResponse, setExpandedResponse] = useState(null)
+  const [showAdminPicker, setShowAdminPicker] = useState(false)
+  const [adminSearch, setAdminSearch] = useState("")
+  const [confirmOwnerTransfer, setConfirmOwnerTransfer] = useState(null)
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/admin/login")
+    }
+  }, [user, authLoading, router])
+
+  // Gate: sign out users who are authenticated but not in survey_admins
+  useEffect(() => {
+    if (!authLoading && user) {
+      isAdminOfAnySurvey().then((isAdmin) => {
+        if (!isAdmin) {
+          signOut().then(() => router.push("/admin/login?error=access_denied"))
+        }
+      })
     }
   }, [user, authLoading, router])
 
@@ -553,14 +972,16 @@ export default function AdminDashboard() {
   const loadSurveyData = useCallback(async () => {
     if (!selectedSurvey) return
     setLoading(true)
-    const [qRes, rRes, aRes] = await Promise.all([
+    const [qRes, rRes, aRes, pRes] = await Promise.all([
       getQuestions(selectedSurvey.id),
       getResponses(selectedSurvey.id),
-      getSurveyAdmins(selectedSurvey.id)
+      getSurveyAdmins(selectedSurvey.id),
+      getAllProfiles()
     ])
     setQuestions(qRes.data || [])
     setResponses(rRes.data || [])
     setAdmins(aRes.data || [])
+    setAllProfiles(pRes.data || [])
     setLoading(false)
   }, [selectedSurvey])
 
@@ -572,14 +993,16 @@ export default function AdminDashboard() {
 
   // ─── Handlers ─────────────────
 
-  const handleSaveSurvey = async ({ title, description, slug }) => {
+  const handleSaveSurvey = async ({ title, description }) => {
     if (editingSurvey === "new") {
       const { data: newSurvey } = await createSurvey(title, description)
       if (newSurvey) {
         await addCurrentUserAsSurveyAdmin(newSurvey.id)
+        setEditingSurvey(null)
+        setSelectedSurvey(newSurvey)
+        setTab("share")
+        return
       }
-    } else if (editingSurvey?.id) {
-      await updateSurvey(editingSurvey.id, { title, description, slug })
     }
     setEditingSurvey(null)
     loadSurveys()
@@ -670,18 +1093,12 @@ export default function AdminDashboard() {
                 <div key={s.id} className="relative group hover:shadow-lg transition-all rounded-2xl">
                   <button onClick={() => setSelectedSurvey(s)} className="w-full bg-white p-6 rounded-2xl border border-orendt-gray-200 hover:border-orendt-black transition-all text-left">
                     <div className="flex justify-between items-start mb-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {s.is_active ? 'Aktiv' : 'Inaktiv'}
-                      </span>
-                      {s.password_hash && (
-                        <span title="Passwortgeschützt" className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase bg-orendt-gray-100 text-orendt-gray-600">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                          </svg>
-                          Passwort
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {s.is_active ? 'Aktiv' : 'Inaktiv'}
                         </span>
-                      )}
+
+                      </div>
                     </div>
                     <h3 className="font-display text-lg font-bold mb-1 max-w-[90%]">{s.title}</h3>
                     <p className="text-sm text-orendt-gray-500 line-clamp-2 mb-4">{s.description || 'Keine Beschreibung'}</p>
@@ -689,21 +1106,15 @@ export default function AdminDashboard() {
                       /{s.slug}
                     </div>
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditingSurvey(s); }}
-                    className="absolute top-6 right-6 p-2 rounded-lg text-orendt-gray-400 hover:text-orendt-black hover:bg-orendt-gray-100 transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    {icons.edit}
-                  </button>
                 </div>
               ))}
             </div>
           )}
         </main>
 
-        {editingSurvey && (
+        {editingSurvey === "new" && (
           <SurveyModal
-            survey={editingSurvey === "new" ? null : editingSurvey}
+            survey={null}
             onSave={handleSaveSurvey}
             onCancel={() => setEditingSurvey(null)}
           />
@@ -764,10 +1175,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 bg-white rounded-xl border border-orendt-gray-200 p-1 w-fit">
+        <div className="flex items-center gap-1 mb-6 bg-white rounded-xl border border-orendt-gray-200 p-1 w-fit overflow-x-auto">
           {[
             { id: "questions", label: "Fragen", icon: icons.clipboard },
             { id: "responses", label: "Ergebnisse", icon: icons.chart },
+            { id: "share", label: "Teilen", icon: icons.share },
+            { id: "settings", label: "Einstellungen", icon: icons.edit },
             { id: "admins", label: "Admins", icon: icons.lock },
           ].map((t) => (
             <button
@@ -794,60 +1207,193 @@ export default function AdminDashboard() {
         ) : tab === "admins" ? (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-xl font-bold">Verwaltung Admins</h2>
+              <h2 className="font-display text-xl font-bold">Verwaltung</h2>
             </div>
-            <div className="bg-white rounded-2xl border border-orendt-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-orendt-gray-200">
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault()
-                    const email = e.target.email.value
-                    if (!email) return
-                    const { error } = await addSurveyAdmin(selectedSurvey.id, email)
-                    if (error) alert("Fehler: " + error.message)
-                    else {
-                      e.target.email.value = ""
-                      loadSurveyData()
-                    }
-                  }}
-                  className="flex gap-3"
-                >
-                  <input 
-                    name="email"
-                    type="email" 
-                    placeholder="E-Mail des neuen Admins..."
-                    className="flex-1 px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 focus:border-orendt-black outline-none text-sm transition-colors"
-                  />
-                  <button type="submit" className="px-6 py-2.5 bg-orendt-black text-orendt-accent rounded-xl text-sm font-semibold font-display hover:opacity-90 transition-opacity">
-                    Hinzufügen
-                  </button>
-                </form>
-                <p className="text-[10px] text-orendt-gray-400 mt-2">Der User muss bereits ein Orendt-Konto haben, um hinzugefügt zu werden.</p>
+
+            {/* Owner Section */}
+            <div className="bg-white rounded-2xl border border-orendt-gray-200 overflow-hidden mb-4">
+              <div className="px-6 py-4 border-b border-orendt-gray-200 bg-orendt-gray-50">
+                <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500">Owner</h3>
               </div>
-              <div className="divide-y divide-orendt-gray-100">
-                {admins.map((admin) => (
-                  <div key={admin.id} className="p-4 flex items-center justify-between hover:bg-orendt-gray-50 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-orendt-black">{admin.profiles?.email || "Unbekannter User"}</span>
-                      <span className="text-[10px] text-orendt-gray-400">ID: {admin.id}</span>
+              <div className="p-4">
+                {(() => {
+                  const ownerProfile = allProfiles.find(p => p.id === selectedSurvey.owner_id)
+                  return ownerProfile ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-orendt-accent flex items-center justify-center text-orendt-black font-display font-bold text-sm">
+                        {(ownerProfile.full_name || ownerProfile.email || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-orendt-black">{ownerProfile.full_name || ownerProfile.email}</span>
+                        {ownerProfile.full_name && <span className="text-[11px] text-orendt-gray-400">{ownerProfile.email}</span>}
+                      </div>
+                      <span className="ml-auto px-2.5 py-1 rounded-lg bg-orendt-accent text-orendt-black text-[10px] font-display font-bold uppercase tracking-wider">
+                        Owner
+                      </span>
                     </div>
-                    {admin.profiles?.email !== user.email && (
-                      <button 
-                        onClick={async () => {
-                          if (confirm("Diesen Admin wirklich entfernen?")) {
-                            await removeSurveyAdmin(admin.id)
-                            loadSurveyData()
-                          }
-                        }}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        {icons.trash}
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ) : (
+                    <p className="text-sm text-orendt-gray-400">Kein Owner zugewiesen</p>
+                  )
+                })()}
               </div>
             </div>
+
+            {/* Admins Section */}
+            <div className="bg-white rounded-2xl border border-orendt-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-orendt-gray-200 bg-orendt-gray-50 flex items-center justify-between">
+                <h3 className="text-xs font-display font-semibold tracking-wider uppercase text-orendt-gray-500">Admins</h3>
+                <button
+                  onClick={() => { setShowAdminPicker(true); setAdminSearch("") }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orendt-black text-orendt-accent text-xs font-semibold font-display hover:opacity-90 transition-opacity"
+                >
+                  {icons.plus} Admin hinzufuegen
+                </button>
+              </div>
+
+              {/* Admin List */}
+              <div className="divide-y divide-orendt-gray-100">
+                {admins.filter(a => a.user_id !== selectedSurvey.owner_id).length === 0 && !showAdminPicker && (
+                  <p className="p-6 text-sm text-orendt-gray-400 text-center">Keine weiteren Admins zugewiesen.</p>
+                )}
+                {admins.filter(a => a.user_id !== selectedSurvey.owner_id).map((admin) => {
+                  const profile = allProfiles.find(p => p.id === admin.user_id)
+                  return (
+                    <div key={admin.id} className="p-4 flex items-center justify-between hover:bg-orendt-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-orendt-gray-200 flex items-center justify-center text-orendt-gray-600 font-display font-bold text-sm">
+                          {(profile?.full_name || profile?.email || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-orendt-black">{profile?.full_name || profile?.email || "Unbekannter User"}</span>
+                          {profile?.full_name && <span className="text-[11px] text-orendt-gray-400">{profile?.email}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Transfer ownership button - only visible to the owner */}
+                        {user.id === selectedSurvey.owner_id && (
+                          <button
+                            onClick={() => setConfirmOwnerTransfer(admin)}
+                            title="Ownership uebertragen"
+                            className="px-2.5 py-1.5 text-[10px] font-display font-semibold rounded-lg border border-orendt-gray-200 text-orendt-gray-500 hover:border-orendt-accent hover:text-orendt-black hover:bg-orendt-accent/10 transition-colors"
+                          >
+                            Zum Owner machen
+                          </button>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (confirm("Diesen Admin wirklich entfernen?")) {
+                              await removeSurveyAdmin(admin.id)
+                              loadSurveyData()
+                            }
+                          }}
+                          className="p-2 text-orendt-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          {icons.trash}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Admin Picker Dropdown */}
+              {showAdminPicker && (
+                <div className="border-t border-orendt-gray-200 p-4">
+                  <div className="relative">
+                    <input
+                      value={adminSearch}
+                      onChange={(e) => setAdminSearch(e.target.value)}
+                      placeholder="Name oder E-Mail suchen..."
+                      autoFocus
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 focus:border-orendt-black outline-none text-sm transition-colors"
+                    />
+                    <button
+                      onClick={() => setShowAdminPicker(false)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-orendt-gray-400 hover:text-orendt-black hover:bg-orendt-gray-100 transition-colors"
+                    >
+                      {icons.x}
+                    </button>
+                  </div>
+                  <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-orendt-gray-200">
+                    {(() => {
+                      const adminUserIds = admins.map(a => a.user_id)
+                      const available = allProfiles.filter(p =>
+                        !adminUserIds.includes(p.id) &&
+                        p.id !== selectedSurvey.owner_id &&
+                        (adminSearch === "" ||
+                          (p.full_name || "").toLowerCase().includes(adminSearch.toLowerCase()) ||
+                          (p.email || "").toLowerCase().includes(adminSearch.toLowerCase()))
+                      )
+                      if (available.length === 0) {
+                        return <p className="p-4 text-sm text-orendt-gray-400 text-center">Keine verfuegbaren Profile gefunden.</p>
+                      }
+                      return available.map(profile => (
+                        <button
+                          key={profile.id}
+                          onClick={async () => {
+                            const { error } = await addSurveyAdmin(selectedSurvey.id, profile.id)
+                            if (error) alert("Fehler: " + error.message)
+                            else {
+                              setShowAdminPicker(false)
+                              setAdminSearch("")
+                              loadSurveyData()
+                            }
+                          }}
+                          className="w-full p-3 flex items-center gap-3 hover:bg-orendt-gray-50 transition-colors text-left border-b border-orendt-gray-100 last:border-b-0"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-orendt-gray-200 flex items-center justify-center text-orendt-gray-600 font-display font-bold text-xs">
+                            {(profile.full_name || profile.email || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-orendt-black">{profile.full_name || profile.email}</span>
+                            {profile.full_name && <span className="text-[11px] text-orendt-gray-400">{profile.email}</span>}
+                          </div>
+                        </button>
+                      ))
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Owner Transfer Confirmation Modal */}
+            {confirmOwnerTransfer && (() => {
+              const transferProfile = allProfiles.find(p => p.id === confirmOwnerTransfer.user_id)
+              return (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                  <h3 className="font-display font-bold text-lg mb-2">Ownership uebertragen?</h3>
+                  <p className="text-sm text-orendt-gray-600 mb-6">
+                    <strong>{transferProfile?.full_name || transferProfile?.email}</strong> wird neuer Owner dieser Umfrage. Du bleibst als Admin erhalten.
+                  </p>
+                  <div className="flex items-center justify-end gap-3">
+                    <button onClick={() => setConfirmOwnerTransfer(null)} className="px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors">Abbrechen</button>
+                    <button
+                      onClick={async () => {
+                        const { error } = await transferSurveyOwnership(selectedSurvey.id, confirmOwnerTransfer.user_id)
+                        if (error) alert("Fehler: " + error.message)
+                        else {
+                          // Update local state
+                          setSelectedSurvey(prev => ({ ...prev, owner_id: confirmOwnerTransfer.user_id }))
+                          // Make sure old owner is in admins list
+                          const oldOwnerId = selectedSurvey.owner_id
+                          const oldOwnerInAdmins = admins.some(a => a.user_id === oldOwnerId)
+                          if (!oldOwnerInAdmins) {
+                            await addSurveyAdmin(selectedSurvey.id, oldOwnerId)
+                          }
+                          setConfirmOwnerTransfer(null)
+                          loadSurveyData()
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-orendt-black text-orendt-accent text-sm font-semibold font-display hover:opacity-90 transition-opacity"
+                    >
+                      Uebertragen
+                    </button>
+                  </div>
+                </div>
+              </div>
+              )
+            })()}
           </div>
         ) : tab === "questions" ? (
           <div>
@@ -887,9 +1433,53 @@ export default function AdminDashboard() {
               ))}
             </div>
           </div>
+        ) : tab === "share" ? (
+          <ShareTab survey={selectedSurvey} />
+        ) : tab === "settings" ? (
+          <SettingsTab
+            survey={selectedSurvey}
+            responseCount={responses.length}
+            onSave={async (updates) => {
+              await updateSurvey(selectedSurvey.id, updates)
+              const { data } = await getAdminSurveys()
+              const updated = (data || []).find(s => s.id === selectedSurvey.id)
+              if (updated) setSelectedSurvey(updated)
+            }}
+            onToggleActive={async () => {
+              await updateSurvey(selectedSurvey.id, { is_active: !selectedSurvey.is_active })
+              const { data } = await getAdminSurveys()
+              const updated = (data || []).find(s => s.id === selectedSurvey.id)
+              if (updated) setSelectedSurvey(updated)
+            }}
+            onDelete={async () => {
+              await deleteSurvey(selectedSurvey.id)
+              setSelectedSurvey(null)
+              loadSurveys()
+            }}
+          />
         ) : (
           <div>
-            <h2 className="font-display text-xl font-bold mb-6">{responses.length} Antworten</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl font-bold">{responses.length} Antworten</h2>
+              {responses.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => exportToExcel(responses, questions, selectedSurvey.title)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                    Excel
+                  </button>
+                  <button
+                    onClick={() => exportToPDF(responses, questions, stats, selectedSurvey.title)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                    PDF
+                  </button>
+                </div>
+              )}
+            </div>
             {responses.length === 0 ? (
               <div className="bg-white rounded-2xl border border-orendt-gray-200 p-12 text-center">
                 <p className="text-orendt-gray-500 font-body">Noch keine Antworten eingegangen.</p>

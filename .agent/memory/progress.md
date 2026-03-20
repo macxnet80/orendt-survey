@@ -3,6 +3,9 @@
 ## Completed
 - Project initialization (Memory Bank).
 - Git repository initialized and pushed to GitHub.
+- Removed obsolete password badge from Admin Dashboard overview.
+- Implemented Legal Pages (Impressum & Datenschutz).
+- Added global LegalFooter with Orendt Studios branding.
 
 ## Next
 - [ ] Generate new logo.

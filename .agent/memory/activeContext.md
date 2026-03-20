@@ -1,9 +1,9 @@
-# Active Context: Logo Replacement
+# Active Context: Legal Pages Implementation
 
 ## Now
-The user wants to extend the app to support multiple surveys with unique slugs (e.g., `/umfrage-1`, `/feedback-q4`).
+The user required a clear Impressum and Datenschutz page. The Impressum was modeled after Orendt Studios' official site, and the Privacy Policy was tailored to their specific requirements (Vercel, EU hosting, total anonymity). A global footer was added to make these pages accessible.
 
 ## Next Steps
-- Implement database schema changes (Surveys table).
-- Update Front- and Backend for dynamic routing.
-- Verify branding consistency.
+- Monitor user feedback on the legal content.
+- Proceed with logo replacement tasks if needed.
+- Verify branding consistency on mobile devices.
