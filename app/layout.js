@@ -1,6 +1,5 @@
 import "./globals.css"
 import { AuthProvider } from "@/components/AuthProvider"
-import LegalFooter from "@/components/LegalFooter"
 
 export const metadata = {
   title: "Mitarbeiter-Umfrage | Orendt Studios",
@@ -12,12 +11,7 @@ export default function RootLayout({ children }) {
     <html lang="de">
       <body className="antialiased">
         <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            <main className="flex-grow">
-              {children}
-            </main>
-            <LegalFooter />
-          </div>
+          <main>{children}</main>
         </AuthProvider>
       </body>
     </html>

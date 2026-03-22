@@ -15,6 +15,7 @@ import {
   isAdminOfAnySurvey, signOut,
 } from "@/lib/supabase"
 import { useAuth } from "@/components/AuthProvider"
+import LegalNavLinks from "@/components/LegalNavLinks"
 
 // ─── Icons (inline SVG) ───────────────────────────
 
@@ -1047,7 +1048,7 @@ export default function AdminDashboard() {
   // Show loading while checking auth
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-orendt-gray-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-orendt-gray-50 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin" />
       </div>
     )
@@ -1063,9 +1064,9 @@ export default function AdminDashboard() {
   // View: Survey List
   if (!selectedSurvey) {
     return (
-      <div className="min-h-screen bg-orendt-gray-50 flex flex-col">
+      <div className="min-h-dvh bg-orendt-gray-50 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-white border-b border-orendt-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+        <header className="bg-white border-b border-orendt-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <div className="h-9 px-3 py-1.5 bg-orendt-black rounded-lg flex items-center justify-center shadow-sm">
               <img src="/orendtstudios_logo.png" alt="Orendt Studios" className="h-full w-auto object-contain" />
@@ -1073,12 +1074,15 @@ export default function AdminDashboard() {
             <div className="h-4 w-[1px] bg-orendt-gray-200 mx-1" />
             <span className="text-xs text-orendt-gray-500 font-medium tracking-wide">Admin</span>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 rounded-xl border border-orendt-gray-200 text-xs font-display font-semibold text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
-          >
-            Logout
-          </button>
+          <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+            <LegalNavLinks className="text-[10px] text-orendt-gray-400 gap-4" />
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl border border-orendt-gray-200 text-xs font-display font-semibold text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10">
@@ -1141,23 +1145,24 @@ export default function AdminDashboard() {
   const stats = analyzeResponses(responses, questions)
 
   return (
-    <div className="min-h-screen bg-orendt-gray-50">
+    <div className="min-h-dvh bg-orendt-gray-50">
       {/* Top Bar */}
-      <header className="bg-white border-b border-orendt-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedSurvey(null)} className="p-2 -ml-2 rounded-lg hover:bg-orendt-gray-100 text-orendt-gray-500">
+      <header className="bg-white border-b border-orendt-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => setSelectedSurvey(null)} className="p-2 -ml-2 rounded-lg hover:bg-orendt-gray-100 text-orendt-gray-500 shrink-0">
             {icons.chevLeft}
           </button>
-          <div className="h-9 px-3 py-1.5 bg-orendt-black rounded-lg flex items-center justify-center shadow-sm">
+          <div className="h-9 px-3 py-1.5 bg-orendt-black rounded-lg flex items-center justify-center shadow-sm shrink-0">
             <img src="/orendtstudios_logo.png" alt="Orendt Studios" className="h-full w-auto object-contain" />
           </div>
-          <div className="h-4 w-[1px] bg-orendt-gray-200 mx-1" />
-          <div className="flex flex-col">
+          <div className="h-4 w-[1px] bg-orendt-gray-200 mx-1 shrink-0" />
+          <div className="flex flex-col min-w-0">
             <span className="text-xs text-orendt-gray-500 font-medium tracking-wide">Dashboard</span>
-            <span className="text-xs font-bold leading-none">{selectedSurvey.title}</span>
+            <span className="text-xs font-bold leading-none truncate">{selectedSurvey.title}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <LegalNavLinks className="text-[10px] text-orendt-gray-400 gap-3 sm:gap-4" />
           <a
             href={`/${selectedSurvey.slug}`}
             target="_blank"

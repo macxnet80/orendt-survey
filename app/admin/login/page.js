@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import LegalNavLinks from "@/components/LegalNavLinks"
 import { signInWithPassword, sendPasswordReset } from "@/lib/supabase"
 
 function LoginForm() {
@@ -50,7 +51,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-orendt-gray-50 flex items-center justify-center p-6">
+    <div className="min-h-dvh bg-orendt-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
 
         {/* Logo */}
@@ -247,6 +248,10 @@ function LoginForm() {
               </button>
             </>
           )}
+        </div>
+
+        <div className="mt-10 flex justify-center">
+          <LegalNavLinks className="text-[10px] text-orendt-gray-400 justify-center" />
         </div>
       </div>
     </div>

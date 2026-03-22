@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import LegalNavLinks from "@/components/LegalNavLinks"
 import { getSurveys } from "@/lib/supabase"
 
 export default function Home() {
@@ -19,14 +20,14 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-dvh bg-white flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-[80vh] bg-orendt-gray-50 flex flex-col items-center justify-center p-6 bg-[url('/grid.svg')]">
+    <div className="min-h-dvh bg-orendt-gray-50 flex flex-col items-center justify-center p-6 bg-[url('/grid.svg')]">
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-orendt-gray-100 my-12">
         <div className="text-center mb-10">
           <h1 className="font-display text-3xl font-bold text-orendt-black mb-2 uppercase tracking-tight">Orendt Studios</h1>
@@ -66,10 +67,11 @@ export default function Home() {
           )}
         </div>
 
-        <div className="mt-12 text-center">
+        <div className="mt-12 flex flex-col items-center gap-4 text-center">
           <Link href="/admin" className="text-xs text-orendt-gray-400 hover:text-orendt-black underline underline-offset-4 decoration-orendt-gray-200 hover:decoration-orendt-black transition-all">
             Zum Admin Dashboard
           </Link>
+          <LegalNavLinks className="text-[10px] text-orendt-gray-400 justify-center" />
         </div>
       </div>
     </div>

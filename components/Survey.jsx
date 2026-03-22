@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import LegalNavLinks from "@/components/LegalNavLinks"
 import { getQuestions, submitResponse, getSurveyBySlug } from "@/lib/supabase"
 
 // ─── Sub-components ───────────────────────────────
@@ -231,7 +232,7 @@ export default function Survey({ slug }) {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-[85vh] bg-white flex items-center justify-center">
+      <div className="min-h-dvh bg-white flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orendt-gray-200 border-t-orendt-black rounded-full animate-spin" />
       </div>
     )
@@ -240,7 +241,7 @@ export default function Survey({ slug }) {
   // Error state
   if (error) {
     return (
-      <div className="min-h-[85vh] bg-white flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-white flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-red-500 font-bold mb-4">{error}</p>
           <a href="/" className="text-sm underline">Zur Startseite</a>
@@ -252,7 +253,7 @@ export default function Survey({ slug }) {
   // Success state
   if (submitted) {
     return (
-      <div className="min-h-[85vh] bg-white flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-white flex items-center justify-center p-6">
         <div className="text-center max-w-md animate-scale-in">
           <div className="w-24 h-24 rounded-full bg-orendt-black flex items-center justify-center mx-auto mb-8">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E8FF00" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -284,7 +285,7 @@ export default function Survey({ slug }) {
     const btnLabel = survey.start_button_label || "Jetzt starten"
 
     return (
-      <div className="min-h-[85vh] bg-orendt-black flex flex-col overflow-x-hidden">
+      <div className="min-h-dvh bg-orendt-black flex flex-col overflow-x-hidden">
         {/* Top bar */}
         <header className="flex items-center px-5 md:px-14 pt-6 md:pt-8 flex-shrink-0 animate-fade-in">
         </header>
@@ -359,6 +360,13 @@ export default function Survey({ slug }) {
                 </p>
               )}
             </div>
+
+            <div className="mt-8 md:mt-10 flex justify-center md:justify-end">
+              <LegalNavLinks
+                variant="dark"
+                className="text-[10px] tracking-[0.28em] gap-x-8 gap-y-2 md:justify-end"
+              />
+            </div>
           </div>
         </main>
 
@@ -374,10 +382,19 @@ export default function Survey({ slug }) {
   const options = q.options || []
 
   return (
-    <div className="min-h-[85vh] bg-white flex flex-col">
+    <div className="min-h-dvh bg-white flex flex-col">
       {/* Header */}
-      <header className="px-6 md:px-8 py-5 flex items-center justify-between border-b border-orendt-gray-200">
+      <header className="px-6 md:px-8 py-4 md:py-5 flex flex-wrap items-center justify-between gap-4 border-b border-orendt-gray-200">
         <OrendtLogo />
+        <div className="flex flex-col items-end gap-2 min-w-0 w-full sm:w-auto">
+          <div className="flex items-center gap-2 justify-end">
+            <div className="w-1.5 h-1.5 rounded-full bg-orendt-black shrink-0 hidden sm:block" />
+            <span className="font-display text-[10px] font-medium tracking-[0.15em] uppercase text-orendt-gray-500 text-right truncate max-w-full sm:max-w-[min(100%,20rem)]">
+              Orendt Studios – {survey.title}
+            </span>
+          </div>
+          <LegalNavLinks className="text-[10px] tracking-[0.15em] text-orendt-gray-500 justify-end gap-4" />
+        </div>
       </header>
 
       <ProgressBar current={currentQ} total={questions.length} />
@@ -511,14 +528,6 @@ export default function Survey({ slug }) {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="px-6 py-4 border-t border-orendt-gray-200 flex items-center justify-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-orendt-black" />
-        <span className="font-display text-[10px] font-medium tracking-[0.15em] uppercase text-orendt-gray-500">
-          Orendt Studios – {survey.title}
-        </span>
-      </footer>
     </div>
   )
 }

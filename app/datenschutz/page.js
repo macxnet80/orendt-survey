@@ -2,7 +2,7 @@ import Link from "next/link"
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-dvh bg-white">
       <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-md border-b border-orendt-gray-100 z-50">
         <div className="max-w-4xl mx-auto h-full px-6 flex items-center">
           <Link href="/" className="font-display text-xl font-bold text-orendt-black uppercase tracking-tighter">
