@@ -348,7 +348,7 @@ export default function Survey({ slug }) {
               <div className="flex-shrink-0 w-full md:w-auto md:order-2">
                 <button
                   onClick={() => setStarted(true)}
-                  className="group w-full md:w-auto inline-flex items-center justify-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-4 md:py-5 rounded-full hover:scale-105 active:scale-95 transition-transform duration-200 animate-pulse"
+                  className="group w-full md:w-auto inline-flex items-center justify-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-4 md:py-5 rounded-full transition-transform duration-200 hover:scale-105 active:scale-95"
                 >
                   <span>{btnLabel}</span>
                   <svg
@@ -391,17 +391,18 @@ export default function Survey({ slug }) {
 
   return (
     <div className="min-h-dvh bg-white flex flex-col">
-      {/* Header */}
-      <header className="px-6 md:px-8 py-4 md:py-5 flex flex-wrap items-center justify-between gap-4 border-b border-orendt-gray-200">
-        <OrendtLogo />
-        <div className="flex flex-col items-end gap-2 min-w-0 w-full sm:w-auto">
-          <div className="flex items-center gap-2 justify-end">
-            <div className="w-1.5 h-1.5 rounded-full bg-orendt-black shrink-0 hidden sm:block" />
-            <span className="font-display text-[10px] font-medium tracking-[0.15em] uppercase text-orendt-gray-500 text-right truncate max-w-full sm:max-w-[min(100%,20rem)]">
-              Orendt Studios – {survey.title}
+      {/* Header — mobil: Logo zentriert; Rechtliches siehe unter den Fragen */}
+      <header className="border-b border-orendt-gray-200 px-6 py-4 md:flex md:items-center md:justify-between md:px-8 md:py-5">
+        <div className="flex justify-center md:justify-start">
+          <OrendtLogo />
+        </div>
+        <div className="mt-3 flex justify-center md:mt-0 md:max-w-[min(100%,24rem)] md:justify-end">
+          <div className="flex items-center gap-2 justify-center md:justify-end">
+            <div className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-orendt-black sm:block" />
+            <span className="max-w-full truncate text-center font-display text-[10px] font-medium uppercase tracking-[0.15em] text-orendt-gray-500 md:text-right">
+              {survey.title}
             </span>
           </div>
-          <LegalNavLinks className="text-[10px] tracking-[0.15em] text-orendt-gray-500 justify-end gap-4" />
         </div>
       </header>
 
@@ -427,8 +428,6 @@ export default function Survey({ slug }) {
           <h2 className="font-display text-2xl md:text-3xl font-bold text-orendt-black mb-2 leading-tight tracking-tight">
             {q.question}
           </h2>
-          {/* Survey Title Context */}
-          <p className="text-xs uppercase text-orendt-gray-400 mb-4 tracking-widest">{survey.title}</p>
 
           {q.subtitle && (
             <p className="text-sm text-orendt-gray-500 mb-6">{q.subtitle}</p>
@@ -516,7 +515,7 @@ export default function Survey({ slug }) {
                 flex items-center gap-2 px-6 py-3 rounded-xl font-display font-semibold text-sm
                 tracking-wide transition-all duration-200 border-0 min-h-[44px]
                 ${canProceed()
-                  ? "bg-orendt-black text-orendt-accent hover:opacity-90 animate-pulse"
+                  ? "bg-orendt-black text-orendt-accent hover:opacity-90"
                   : "bg-orendt-gray-200 text-orendt-gray-600 cursor-not-allowed"
                 }
               `}
@@ -533,6 +532,10 @@ export default function Survey({ slug }) {
                 </>
               )}
             </button>
+          </div>
+
+          <div className="mt-10 flex justify-center border-t border-orendt-gray-100 pt-6">
+            <LegalNavLinks className="justify-center gap-6 text-[9px] font-normal tracking-[0.18em] text-orendt-gray-300" />
           </div>
         </div>
       </main>
