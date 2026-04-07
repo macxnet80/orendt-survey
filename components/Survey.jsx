@@ -53,21 +53,29 @@ function OptionButton({ selected, onClick, children, index }) {
 function RatingRow({ label, value, onChange, index }) {
   return (
     <div
-      className="flex items-center justify-between py-4 border-b border-orendt-gray-200 opacity-0 animate-slide-up"
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0 py-4 border-b border-orendt-gray-200 opacity-0 animate-slide-up min-w-0"
       style={{ animationDelay: `${index * 80}ms`, animationFillMode: "forwards" }}
     >
-      <span className="text-sm text-orendt-black font-body flex-1 pr-4">{label}</span>
-      <div className="flex gap-1.5">
+      <span className="text-sm text-orendt-black font-body sm:flex-1 sm:pr-4 sm:min-w-0">{label}</span>
+      <div
+        className="
+          grid w-full min-w-0 grid-cols-5 gap-1.5
+          sm:flex sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-1.5 sm:shrink-0
+        "
+        role="group"
+        aria-label={`Bewertung für ${label}`}
+      >
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
           <button
             key={n}
+            type="button"
             onClick={() => onChange(n)}
             className={`
-              w-8 h-8 sm:w-10 sm:h-10 rounded-lg border-2 font-display font-bold text-xs sm:text-sm
-              transition-all duration-200
+              flex h-11 w-full min-w-0 items-center justify-center rounded-lg border-2 font-display font-bold text-xs
+              transition-all duration-200 touch-manipulation sm:h-10 sm:w-10 sm:text-sm
               ${value === n
                 ? "border-orendt-black bg-orendt-black text-orendt-accent"
-                : "border-orendt-gray-200 text-orendt-gray-500 hover:border-orendt-gray-400"
+                : "border-orendt-gray-200 text-orendt-gray-600 hover:border-orendt-gray-400 hover:text-orendt-black"
               }
             `}
           >
@@ -403,7 +411,7 @@ export default function Survey({ slug }) {
       <main className="flex-1 flex items-center justify-center p-6 md:p-10">
         <div
           key={animKey}
-          className={`w-full max-w-xl ${slideDir === "right" ? "animate-slide-right" : "animate-slide-left"}`}
+          className={`w-full min-w-0 max-w-xl ${slideDir === "right" ? "animate-slide-right" : "animate-slide-left"}`}
         >
           {/* Category + Counter */}
           <div className="flex items-center justify-between mb-2">
@@ -486,10 +494,10 @@ export default function Survey({ slug }) {
               onClick={goBack}
               disabled={currentQ === 0}
               className={`
-                flex items-center gap-2 px-5 py-3 rounded-xl border-2 font-display font-semibold text-sm
+                flex min-h-[44px] items-center gap-2 px-5 py-3 rounded-xl border-2 font-display font-semibold text-sm
                 tracking-wide transition-all duration-200
                 ${currentQ === 0
-                  ? "border-orendt-gray-200 text-orendt-gray-400 cursor-not-allowed"
+                  ? "border-orendt-gray-200 text-orendt-gray-500 cursor-not-allowed"
                   : "border-orendt-black text-orendt-black hover:bg-orendt-gray-50"
                 }
               `}
@@ -506,10 +514,10 @@ export default function Survey({ slug }) {
               disabled={!canProceed() || submitting}
               className={`
                 flex items-center gap-2 px-6 py-3 rounded-xl font-display font-semibold text-sm
-                tracking-wide transition-all duration-200 border-0
+                tracking-wide transition-all duration-200 border-0 min-h-[44px]
                 ${canProceed()
                   ? "bg-orendt-black text-orendt-accent hover:opacity-90 animate-pulse"
-                  : "bg-orendt-gray-200 text-orendt-gray-400 cursor-not-allowed"
+                  : "bg-orendt-gray-200 text-orendt-gray-600 cursor-not-allowed"
                 }
               `}
             >
