@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import LegalNavLinks from "@/components/LegalNavLinks"
-import { getQuestions, submitResponse, getSurveyBySlug } from "@/lib/supabase"
+import { getQuestions, getSurveyBySlug } from "@/lib/supabase"
 
 // ─── Sub-components ───────────────────────────────
 
@@ -231,7 +231,21 @@ export default function Survey({ slug }) {
       } else {
         setSubmitting(true)
         try {
-          await submitResponse(survey.id, payload)
+          const res = await fetch("/api/responses", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ survey_id: survey.id, answers: payload })
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            const detail = typeof json.error === "string" ? json.error : null
+            setError(
+              detail
+                ? `Antworten konnten nicht gespeichert werden: ${detail}`
+                : "Antworten konnten nicht gespeichert werden."
+            )
+            return
+          }
           setSubmitted(true)
         } finally {
           setSubmitting(false)

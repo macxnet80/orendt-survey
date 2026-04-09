@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { submitResponse, getResponses, deleteResponse } from "@/lib/supabase"
+import { getResponses, deleteResponse } from "@/lib/supabase"
+import { submitResponseServer } from "@/lib/supabase-admin"
 
 export async function GET() {
   const { data, error } = await getResponses()
@@ -9,8 +10,22 @@ export async function GET() {
 
 export async function POST(request) {
   const body = await request.json()
-  const { data, error } = await submitResponse(body.answers)
-  if (error) return NextResponse.json({ error }, { status: 500 })
+  const surveyId = body.survey_id ?? body.surveyId
+  const answers = body.answers
+  if (!surveyId || answers == null || typeof answers !== "object" || Array.isArray(answers)) {
+    return NextResponse.json(
+      { error: "Body must include survey_id (or surveyId) and answers (object)" },
+      { status: 400 }
+    )
+  }
+  const { data, error } = await submitResponseServer(surveyId, answers)
+  if (error) {
+    const message =
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : String(error)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
   return NextResponse.json(data, { status: 201 })
 }
 
