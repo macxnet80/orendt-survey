@@ -1,10 +1,169 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react"
 import LegalNavLinks from "@/components/LegalNavLinks"
 import { getQuestions, getSurveyBySlug } from "@/lib/supabase"
 
 // ─── Sub-components ───────────────────────────────
+
+function applyTwoLineFontSize(el, maxFontCandidatePx, { minFontPx, maxFontPx, lineHeightUnitless = 0.9 }) {
+  const hi = Math.min(maxFontPx, Math.max(minFontPx + 1, Math.floor(maxFontCandidatePx)))
+  let low = minFontPx
+  let high = hi
+  let best = minFontPx
+  const heightBudget = (px) => px * lineHeightUnitless * 2 + 10
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    el.style.fontSize = `${mid}px`
+    if (el.scrollHeight <= heightBudget(mid)) {
+      best = mid
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+  el.style.fontSize = `${best}px`
+}
+
+/** Einen einzeiligen Titel in zwei optisch ausgewogene Zeilen teilen (Wortgrenzen). */
+function splitHeadlineIntoTwoBalancedLines(text) {
+  const trimmed = (text || "").trim()
+  if (!trimmed) return { line1: "", line2: null }
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  if (words.length >= 2) {
+    const longest = words.reduce((w, x) => (x.length > w.length ? x : w), "")
+    const longFirst = words[0].length >= 20 && words[0] === longest
+    if (longFirst) {
+      return {
+        line1: words[0],
+        line2: words.slice(1).join(" "),
+      }
+    }
+    let bestIdx = 1
+    let bestDiff = Infinity
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" ")
+      const b = words.slice(i).join(" ")
+      const diff = Math.abs(a.length - b.length)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestIdx = i
+      }
+    }
+    return {
+      line1: words.slice(0, bestIdx).join(" "),
+      line2: words.slice(bestIdx).join(" "),
+    }
+  }
+  if (trimmed.length >= 16) {
+    const mid = Math.floor(trimmed.length / 2)
+    return {
+      line1: trimmed.slice(0, mid).trimEnd(),
+      line2: trimmed.slice(mid).trimStart(),
+    }
+  }
+  return { line1: trimmed, line2: null }
+}
+
+/** Landing headline: max two lines; scales font down if text would overflow. */
+function LandingHeadline({ line1, line2 }) {
+  const containerRef = useRef(null)
+  const h1Ref = useRef(null)
+  const twoParts = line2 != null
+
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    const el = h1Ref.current
+    if (!container || !el) return
+
+    const measure = () => {
+      let maxW = container.offsetWidth
+      if (maxW < 48 && typeof window !== "undefined") {
+        maxW = Math.max(maxW, window.innerWidth - 48)
+      }
+      const targetMax = Math.min(176, Math.max(44, Math.floor(maxW * 0.22)))
+      applyTwoLineFontSize(el, targetMax, {
+        minFontPx: 26,
+        maxFontPx: 176,
+        lineHeightUnitless: 0.9,
+      })
+    }
+
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(container)
+    return () => ro.disconnect()
+  }, [line1, line2])
+
+  return (
+    <div ref={containerRef} className="w-full min-w-0">
+      <div
+        className="opacity-0 animate-slide-up"
+        style={{ animationDelay: "0.15s", animationFillMode: "forwards" }}
+      >
+        <h1
+          ref={h1Ref}
+          className="font-display font-bold tracking-tight uppercase break-words [overflow-wrap:anywhere] text-white"
+          style={{
+            lineHeight: 0.9,
+            fontSize: "clamp(1.625rem, 8.5vw, 11rem)",
+          }}
+        >
+          {twoParts ? (
+            <>
+              <span className="text-white">{line1}</span>
+              <br />
+              <span className="text-orendt-accent">{line2}</span>
+            </>
+          ) : (
+            <span className="text-orendt-accent">{line1}</span>
+          )}
+        </h1>
+      </div>
+    </div>
+  )
+}
+
+/** Fragentitel: maximal zwei Zeilen, ggf. kleinere Schrift. */
+function QuestionHeadline({ children }) {
+  const containerRef = useRef(null)
+  const h2Ref = useRef(null)
+
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    const el = h2Ref.current
+    if (!container || !el) return
+
+    const measure = () => {
+      const maxW = container.offsetWidth
+      applyTwoLineFontSize(el, Math.max(22, maxW * 0.065), {
+        minFontPx: 16,
+        maxFontPx: 42,
+        lineHeightUnitless: 0.95,
+      })
+    }
+
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(container)
+    return () => ro.disconnect()
+  }, [children])
+
+  return (
+    <div ref={containerRef} className="w-full min-w-0 mb-2">
+      <h2
+        ref={h2Ref}
+        className="font-display font-bold text-orendt-black tracking-tight break-words [overflow-wrap:anywhere]"
+        style={{
+          lineHeight: 0.95,
+          fontSize: "clamp(1rem, 4.2vw, 1.875rem)",
+        }}
+      >
+        {children}
+      </h2>
+    </div>
+  )
+}
 
 function ProgressBar({ current, total }) {
   const pct = ((current + 1) / total) * 100
@@ -65,7 +224,7 @@ function RatingRow({ label, value, onChange, index }) {
         role="group"
         aria-label={`Bewertung für ${label}`}
       >
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+        {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             type="button"
@@ -352,10 +511,19 @@ export default function Survey({ slug }) {
 
   // Landing page
   if (!started) {
-    // Split by \n for admin-controlled line breaks.
-    // If no newlines, render as a single block (no word-per-line splitting).
     const rawTitle = (survey.landing_title || survey.title).toUpperCase()
-    const headlineLines = rawTitle.includes("\n") ? rawTitle.split("\n") : [rawTitle]
+    const parts = rawTitle.split("\n").map((s) => s.trim()).filter(Boolean)
+    let landingLine1 = ""
+    let landingLine2 = null
+    if (parts.length === 1) {
+      const split = splitHeadlineIntoTwoBalancedLines(parts[0])
+      landingLine1 = split.line1
+      landingLine2 = split.line2
+    } else if (parts.length >= 2) {
+      landingLine1 = parts[0]
+      landingLine2 = parts.slice(1).join(" ")
+    }
+    const headlineSegmentCount = landingLine2 != null ? 2 : 1
     const descText = survey.landing_description || survey.description
     const btnLabel = survey.start_button_label || "Jetzt starten"
 
@@ -368,31 +536,15 @@ export default function Survey({ slug }) {
         {/* Main content */}
         <main className="flex-1 flex flex-col justify-between px-5 md:px-14 pt-6 md:pt-10 pb-8 md:pb-12 min-h-0">
 
-          {/* Headline block */}
+          {/* Headline block: max two lines; font scales down when needed */}
           <div>
-            <h1
-              className="font-display font-bold tracking-tight uppercase text-white break-words"
-              style={{ fontSize: "clamp(1.8rem, 7.5vw, 7.5rem)", lineHeight: 0.9 }}
-            >
-              {headlineLines.map((line, i) => (
-                <span
-                  key={i}
-                  className="block opacity-0 animate-slide-up"
-                  style={{ animationDelay: `${0.15 + i * 0.08}s`, animationFillMode: "forwards" }}
-                >
-                  {i === headlineLines.length - 1
-                    ? <span className="text-orendt-accent">{line}</span>
-                    : line
-                  }
-                </span>
-              ))}
-            </h1>
+            <LandingHeadline line1={landingLine1} line2={landingLine2} />
           </div>
 
           {/* Bottom section */}
           <div
             className="opacity-0 animate-slide-up mt-8 md:mt-0"
-            style={{ animationDelay: `${0.15 + headlineLines.length * 0.08 + 0.1}s`, animationFillMode: "forwards" }}
+            style={{ animationDelay: `${0.15 + headlineSegmentCount * 0.08 + 0.1}s`, animationFillMode: "forwards" }}
           >
             {/* Divider */}
             <div className="flex items-center gap-4 mb-5 md:mb-8">
@@ -492,9 +644,7 @@ export default function Survey({ slug }) {
           </div>
 
           {/* Question */}
-          <h2 className="font-display text-2xl md:text-3xl font-bold text-orendt-black mb-2 leading-tight tracking-tight">
-            {q.question}
-          </h2>
+          <QuestionHeadline>{q.question}</QuestionHeadline>
 
           {q.subtitle && (
             <p className="text-sm text-orendt-gray-500 mb-6">{q.subtitle}</p>

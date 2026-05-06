@@ -621,11 +621,11 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
               <textarea
                 value={landingTitle}
                 onChange={e => setLandingTitle(e.target.value)}
-                placeholder={`${title || "Ueberschrift"}\nZweite Zeile\nDritte Zeile`}
-                rows={3}
+                placeholder={`${title || "Ueberschrift"}\nZweite Zeile (Akzent)`}
+                rows={2}
                 className={`${inputClass} resize-none font-mono`}
               />
-              <p className="text-[10px] text-orendt-gray-400 mt-1">Jede Zeile = eine Headline-Zeile. Leer lassen = Umfrage-Titel wird verwendet.</p>
+              <p className="text-[10px] text-orendt-gray-400 mt-1">Max. zwei Zeilen: erste Zeile oberer Text, ab Zeile 2 wird der Rest zusammengeführt (Akzent-Farbe). Lange Texte werden automatisch kleiner skaliert. Leer lassen = Umfrage-Titel.</p>
             </div>
             <div>
               <label className={labelClass}>Startseiten-Text</label>
