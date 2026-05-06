@@ -310,6 +310,22 @@ export default function Survey({ slug }) {
 
       const { data: surveyData, error: surveyError } = await getSurveyBySlug(slug)
 
+      if (surveyError?.code === "expired" && surveyError.expires_at) {
+        const raw = String(surveyError.expires_at).slice(0, 10)
+        const [y, mo, da] = raw.split("-").map(Number)
+        const label =
+          y && mo && da
+            ? new Date(y, mo - 1, da).toLocaleDateString("de-DE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })
+            : raw
+        setError(`Diese Umfrage ist am ${label} abgelaufen und wurde deaktiviert.`)
+        setLoading(false)
+        return
+      }
+
       if (surveyError || !surveyData) {
         setError("Umfrage nicht gefunden.")
         setLoading(false)

@@ -8,5 +8,10 @@
 
 ## Dependencies
 - `lucide-react` (icons)
-- `recharts` (analytics)
-- `framer-motion` (animations)
+- `@supabase/supabase-js`
+- `jspdf`, `jspdf-autotable`, `xlsx` (Exports)
+- KI-Oberflaeche ohne zusaetzliches SDK: `fetch` zu Anthropic / OpenAI
+
+## Umgebungsvariablen (Auszug)
+- Supabase: `NEXT_PUBLIC_SUPABASE_*`, server: `SUPABASE_SERVICE_ROLE_KEY`
+- KI (nur Server): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, optional `ANTHROPIC_MODEL`, `OPENAI_MODEL`

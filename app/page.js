@@ -11,9 +11,14 @@ export default function Home() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await getSurveys()
-      if (data) setSurveys(data)
-      setLoading(false)
+      try {
+        const { data } = await getSurveys()
+        if (data) setSurveys(data)
+      } catch (error) {
+        console.error("Fehler beim Laden der Umfragen:", error)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])

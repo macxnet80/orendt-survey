@@ -13,9 +13,11 @@ import {
   addCurrentUserAsSurveyAdmin, getSurveyAdmins, addSurveyAdmin, removeSurveyAdmin,
   getAllProfiles, transferSurveyOwnership,
   isAdminOfAnySurvey, signOut,
+  getSession,
 } from "@/lib/supabase"
 import { useAuth } from "@/components/AuthProvider"
 import LegalNavLinks from "@/components/LegalNavLinks"
+import { berlinCalendarDate, isSurveyExpired } from "@/lib/survey-expiry"
 
 // ─── Icons (inline SVG) ───────────────────────────
 
@@ -63,6 +65,29 @@ const icons = {
 
 // ─── Helpers ───────────────────────────────────────
 
+function formatExpiresAtLabel(expiresAt) {
+  if (!expiresAt) return ""
+  const raw = String(expiresAt).slice(0, 10)
+  const [y, m, d] = raw.split("-").map(Number)
+  if (!y || !m || !d) return raw
+  return new Date(y, m - 1, d).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}
+
+/** Calendar-day distance from today (Europe/Berlin) to expires_at; last day still counts as active. */
+function berlinDaysUntilExpiry(expiresAt) {
+  if (!expiresAt || isSurveyExpired(expiresAt)) return null
+  const exp = String(expiresAt).slice(0, 10)
+  const today = berlinCalendarDate()
+  const [ey, em, ed] = exp.split("-").map(Number)
+  const [ty, tm, td] = today.split("-").map(Number)
+  const e = Date.UTC(ey, em - 1, ed)
+  const t = Date.UTC(ty, tm - 1, td)
+  return Math.round((e - t) / 86400000)
+}
 
 // ─── Type badges ───────────────────────────────────
 
@@ -85,10 +110,15 @@ const TYPE_COLORS = {
 function SurveyModal({ onSave, onCancel }) {
   const [title, setTitle] = useState("")
   const [desc, setDesc] = useState("")
+  const [expiresAt, setExpiresAt] = useState("")
 
   const handleSave = () => {
     if (!title.trim()) return
-    onSave({ title, description: desc })
+    onSave({
+      title,
+      description: desc,
+      expires_at: expiresAt.trim() ? expiresAt.trim() : null,
+    })
   }
 
   const inputClass = "w-full px-4 py-3 rounded-xl border-2 border-orendt-gray-200 bg-orendt-gray-50 text-sm font-body focus:outline-none focus:border-orendt-black transition-colors"
@@ -118,6 +148,18 @@ function SurveyModal({ onSave, onCancel }) {
               rows={3}
               className={`${inputClass} resize-none`}
             />
+          </div>
+          <div>
+            <label className={labelClass}>Laeuft bis (optional)</label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className={`${inputClass} font-mono`}
+            />
+            <p className="text-[10px] text-orendt-gray-400 mt-1">
+              Am gewaehlten Tag bis 23:59 Uhr (Europe/Berlin) aktiv; danach automatisch inaktiv.
+            </p>
           </div>
         </div>
         <div className="mt-8 flex justify-end gap-3">
@@ -497,6 +539,9 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
   const [title, setTitle] = useState(survey?.title || "")
   const [desc, setDesc] = useState(survey?.description || "")
   const [slug, setSlug] = useState(survey?.slug || "")
+  const [expiresAt, setExpiresAt] = useState(
+    survey?.expires_at ? String(survey.expires_at).slice(0, 10) : ""
+  )
   const [landingTitle, setLandingTitle] = useState(survey?.landing_title || "")
   const [landingDescription, setLandingDescription] = useState(survey?.landing_description || "")
   const [startButtonLabel, setStartButtonLabel] = useState(survey?.start_button_label || "")
@@ -509,6 +554,7 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
     setTitle(survey?.title || "")
     setDesc(survey?.description || "")
     setSlug(survey?.slug || "")
+    setExpiresAt(survey?.expires_at ? String(survey.expires_at).slice(0, 10) : "")
     setLandingTitle(survey?.landing_title || "")
     setLandingDescription(survey?.landing_description || "")
     setStartButtonLabel(survey?.start_button_label || "")
@@ -521,6 +567,7 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
       title,
       description: desc,
       slug,
+      expires_at: expiresAt.trim() ? expiresAt.trim() : null,
       landing_title: landingTitle || null,
       landing_description: landingDescription || null,
       start_button_label: startButtonLabel || null,
@@ -588,6 +635,26 @@ function SettingsTab({ survey, onSave, responseCount, onDelete, onToggleActive }
                   ${survey.is_active ? "translate-x-6" : "translate-x-1"}
                 `}
               />
+            </button>
+          </div>
+          <div className="mt-6 pt-6 border-t border-orendt-gray-100">
+            <label className={labelClass}>Laeuft bis</label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className={`${inputClass} font-mono max-w-xs`}
+            />
+            <p className="text-[11px] text-orendt-gray-400 mt-2 leading-relaxed">
+              Die Umfrage wird am gewaehlten Datum um 23:59 Uhr (Europe/Berlin) automatisch auf inaktiv gestellt.
+              Feld leeren = kein automatisches Ende.
+            </p>
+            <button
+              type="button"
+              onClick={() => setExpiresAt("")}
+              className="mt-2 text-[11px] font-semibold text-orendt-gray-500 hover:text-orendt-black underline underline-offset-4"
+            >
+              Ablaufdatum entfernen
             </button>
           </div>
         </div>
@@ -701,30 +768,98 @@ function StatCard({ label, value, sub }) {
   )
 }
 
+/** Markdown fuer PDF/Excel einfacher Darstellung entschaerfen */
+function softenMarkdownLite(text) {
+  if (!text || typeof text !== "string") return ""
+  return text.replace(/\*\*/g, "").replace(/^#{1,6}\s+/gm, "")
+}
+
+/** Erzwingt Umbruch auch bei sehr langen "Worten" ohne Leerzeichen. */
+function wrapLongTokens(text, chunkSize = 30) {
+  if (!text || typeof text !== "string") return ""
+  return text
+    .split(/\s+/)
+    .map((token) => {
+      if (token.length <= chunkSize) return token
+      const chunks = []
+      for (let i = 0; i < token.length; i += chunkSize) {
+        chunks.push(token.slice(i, i + chunkSize))
+      }
+      return chunks.join(" ")
+    })
+    .join(" ")
+}
+
+/** Einheitliche Textdarstellung fuer Excel/PDF (alle Antwort-Typen). */
+function formatAnswerForExport(val) {
+  if (val == null) return ""
+  if (typeof val === "string") return val
+  if (Array.isArray(val)) return val.join(", ")
+  if (typeof val === "object") {
+    return Object.entries(val)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ")
+  }
+  return String(val)
+}
+
+/** Eindeutige Spaltenueberschriften (gleicher Fragetext wurde sonst ueberschrieben). */
+function buildExportQuestionHeaders(questions) {
+  const seen = new Map()
+  return questions.map((q) => {
+    const base = `${q.category} — ${q.question}`
+    const n = (seen.get(base) || 0) + 1
+    seen.set(base, n)
+    return n > 1 ? `${base} (${n})` : base
+  })
+}
+
 function analyzeResponses(responses, questions) {
   if (!responses || !questions) return {}
   const stats = {}
   questions.forEach((q) => {
     if (q.type === "single") {
-      const counts = {}; (q.options || []).forEach((o) => (counts[o] = 0))
+      const counts = {}
+      ;(q.options || []).forEach((o) => {
+        counts[o] = 0
+      })
       responses.forEach((r) => {
         const val = r.answers?.[q.id]
-        if (val && counts[val] !== undefined) counts[val]++
+        if (val == null || val === "") return
+        if (counts[val] === undefined) counts[val] = 0
+        counts[val]++
       })
       stats[q.id] = { type: "single", counts, total: responses.length }
     } else if (q.type === "multiple") {
-      const counts = {}; (q.options || []).forEach((o) => (counts[o] = 0))
+      const counts = {}
+      ;(q.options || []).forEach((o) => {
+        counts[o] = 0
+      })
       responses.forEach((r) => {
-        const vals = r.answers?.[q.id] || []
-        vals.forEach((v) => { if (counts[v] !== undefined) counts[v]++ })
+        const vals = r.answers?.[q.id]
+        if (!Array.isArray(vals)) return
+        vals.forEach((v) => {
+          if (v == null || v === "") return
+          if (counts[v] === undefined) counts[v] = 0
+          counts[v]++
+        })
       })
       stats[q.id] = { type: "multiple", counts, total: responses.length }
     } else if (q.type === "rating") {
-      const avgs = {}; (q.rating_items || []).forEach((item) => {
-        let sum = 0, count = 0
+      const itemsSet = new Set(q.rating_items || [])
+      responses.forEach((r) => {
+        Object.keys(r.answers?.[q.id] || {}).forEach((k) => itemsSet.add(k))
+      })
+      const avgs = {}
+      itemsSet.forEach((item) => {
+        let sum = 0
+        let count = 0
         responses.forEach((r) => {
           const val = r.answers?.[q.id]?.[item]
-          if (val) { sum += val; count++ }
+          if (val != null && val !== "") {
+            sum += Number(val)
+            count++
+          }
         })
         avgs[item] = count > 0 ? (sum / count).toFixed(1) : "–"
       })
@@ -732,33 +867,26 @@ function analyzeResponses(responses, questions) {
     } else if (q.type === "text") {
       const texts = responses
         .map((r) => r.answers?.[q.id])
-        .filter(Boolean)
+        .filter((t) => t != null && String(t).trim() !== "")
       stats[q.id] = { type: "text", texts }
     }
   })
   return stats
 }
 
-function exportToExcel(responses, questions, surveyTitle) {
+function exportToExcel(responses, questions, survey) {
+  const surveyTitle = survey?.title ?? "umfrage"
+  const qHeaders = buildExportQuestionHeaders(questions)
   const rows = responses.map((r, i) => {
     const row = {
       "#": responses.length - i,
-      "Datum": new Date(r.submitted_at).toLocaleDateString("de-DE", {
+      Datum: new Date(r.submitted_at).toLocaleDateString("de-DE", {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
       }),
     }
-    questions.forEach((q) => {
-      const val = r.answers?.[q.id]
-      if (val == null) {
-        row[q.question] = ""
-      } else if (Array.isArray(val)) {
-        row[q.question] = val.join(", ")
-      } else if (typeof val === "object") {
-        row[q.question] = Object.entries(val).map(([k, v]) => `${k}: ${v}`).join(", ")
-      } else {
-        row[q.question] = val
-      }
+    questions.forEach((q, qi) => {
+      row[qHeaders[qi]] = formatAnswerForExport(r.answers?.[q.id])
     })
     return row
   })
@@ -773,6 +901,27 @@ function exportToExcel(responses, questions, surveyTitle) {
   ws["!cols"] = colWidths
 
   const wb = XLSX.utils.book_new()
+
+  const kiSummary = typeof survey?.ai_summary === "string" && survey.ai_summary.trim()
+  if (kiSummary) {
+    const generatedAtLabel = survey.ai_summary_generated_at
+      ? new Date(survey.ai_summary_generated_at).toLocaleString("de-DE", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+      : ""
+    const modelLabel = survey.ai_summary_model ?? ""
+    const lines = softenMarkdownLite(kiSummary).split(/\r?\n/)
+    const kiAoa = [
+      ["KI-Zusammenfassung"],
+      [],
+      ["Modell", modelLabel],
+      ["Generiert am", generatedAtLabel],
+      [],
+      ...lines.map((line) => [line]),
+    ]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kiAoa), "KI-Zusammenfassung")
+  }
+
   XLSX.utils.book_append_sheet(wb, ws, "Antworten")
 
   // Summary sheet
@@ -780,21 +929,40 @@ function exportToExcel(responses, questions, surveyTitle) {
   questions.forEach((q) => {
     if (q.type === "single" || q.type === "multiple") {
       const counts = {}
-      ;(q.options || []).forEach((o) => (counts[o] = 0))
+      ;(q.options || []).forEach((o) => {
+        counts[o] = 0
+      })
       responses.forEach((r) => {
         const val = r.answers?.[q.id]
-        if (q.type === "single" && val && counts[val] !== undefined) counts[val]++
-        if (q.type === "multiple" && Array.isArray(val)) val.forEach((v) => { if (counts[v] !== undefined) counts[v]++ })
+        if (q.type === "single" && val != null && val !== "") {
+          if (counts[val] === undefined) counts[val] = 0
+          counts[val]++
+        }
+        if (q.type === "multiple" && Array.isArray(val)) {
+          val.forEach((v) => {
+            if (v == null || v === "") return
+            if (counts[v] === undefined) counts[v] = 0
+            counts[v]++
+          })
+        }
       })
       Object.entries(counts).forEach(([option, count]) => {
         summaryRows.push({ Frage: q.question, Kategorie: q.category, Option: option, Wert: count })
       })
     } else if (q.type === "rating") {
-      ;(q.rating_items || []).forEach((item) => {
-        let sum = 0, count = 0
+      const itemsSet = new Set(q.rating_items || [])
+      responses.forEach((r) => {
+        Object.keys(r.answers?.[q.id] || {}).forEach((k) => itemsSet.add(k))
+      })
+      ;[...itemsSet].sort().forEach((item) => {
+        let sum = 0
+        let count = 0
         responses.forEach((r) => {
           const val = r.answers?.[q.id]?.[item]
-          if (val) { sum += val; count++ }
+          if (val != null && val !== "") {
+            sum += Number(val)
+            count++
+          }
         })
         summaryRows.push({ Frage: q.question, Kategorie: q.category, Option: item, Wert: count > 0 ? (sum / count).toFixed(1) : "–" })
       })
@@ -808,13 +976,57 @@ function exportToExcel(responses, questions, surveyTitle) {
   XLSX.writeFile(wb, `${surveyTitle || "umfrage"}-export.xlsx`)
 }
 
-function exportToPDF(responses, questions, stats, surveyTitle) {
+function exportToPDF(responses, questions, stats, survey) {
   const doc = new jsPDF({ orientation: "landscape" })
   const pageWidth = doc.internal.pageSize.getWidth()
+  const surveyTitle = survey?.title || "Umfrage-Ergebnisse"
+  const pageBottom = () => doc.internal.pageSize.getHeight() - 14
 
-  // Title
+  const kiRaw = typeof survey?.ai_summary === "string" ? survey.ai_summary.trim() : ""
+  if (kiRaw) {
+    doc.setFontSize(18)
+    doc.setFont(undefined, "bold")
+    doc.text(surveyTitle, 14, 18)
+    doc.setFontSize(12)
+    doc.text("KI-Zusammenfassung", 14, 30)
+    doc.setFont(undefined, "normal")
+    doc.setFontSize(9)
+    doc.setTextColor(120)
+    const meta = [
+      survey.ai_summary_model ? `Modell: ${survey.ai_summary_model}` : "",
+      survey.ai_summary_generated_at
+        ? new Date(survey.ai_summary_generated_at).toLocaleString("de-DE", {
+          day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+        })
+        : "",
+    ].filter(Boolean).join("  ·  ")
+    doc.text(meta || "—", 14, 38)
+    doc.setTextColor(0)
+
+    let yKi = 48
+    doc.setFontSize(9)
+    const plain = softenMarkdownLite(kiRaw)
+    plain.split(/\n/).forEach((line, lineIdx, arr) => {
+      const split = doc.splitTextToSize(line || " ", pageWidth - 28)
+      split.forEach((snip) => {
+        if (yKi > pageBottom()) {
+          doc.addPage()
+          yKi = 16
+        }
+        doc.text(snip, 14, yKi)
+        yKi += 6
+      })
+      if (lineIdx < arr.length - 1 && yKi <= pageBottom()) {
+        yKi += 3
+      }
+    })
+    doc.addPage()
+  }
+
   doc.setFontSize(18)
+  doc.setFont(undefined, "bold")
   doc.text(surveyTitle || "Umfrage-Ergebnisse", 14, 20)
+  doc.setFont(undefined, "normal")
   doc.setFontSize(10)
   doc.setTextColor(120)
   doc.text(`${responses.length} Antworten | Exportiert am ${new Date().toLocaleDateString("de-DE")}`, 14, 28)
@@ -846,7 +1058,7 @@ function exportToPDF(responses, questions, stats, surveyTitle) {
       const tableData = Object.entries(s.counts)
         .sort(([, a], [, b]) => b - a)
         .map(([label, count]) => [
-          label,
+          wrapLongTokens(label, 28),
           String(count),
           s.total > 0 ? `${((count / s.total) * 100).toFixed(0)}%` : "0%",
         ])
@@ -859,10 +1071,11 @@ function exportToPDF(responses, questions, stats, surveyTitle) {
         bodyStyles: { fontSize: 8 },
         margin: { left: 14, right: 14 },
         tableWidth: "auto",
+        styles: { overflow: "linebreak", cellWidth: "auto" },
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (s.type === "rating") {
-      const tableData = Object.entries(s.avgs).map(([item, avg]) => [item, `${avg} / 5`])
+      const tableData = Object.entries(s.avgs).map(([item, avg]) => [wrapLongTokens(item, 28), `${avg} / 5`])
       autoTable(doc, {
         startY: y,
         head: [["Kriterium", "Durchschnitt"]],
@@ -872,11 +1085,12 @@ function exportToPDF(responses, questions, stats, surveyTitle) {
         bodyStyles: { fontSize: 8 },
         margin: { left: 14, right: 14 },
         tableWidth: "auto",
+        styles: { overflow: "linebreak", cellWidth: "auto" },
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (s.type === "text") {
       if (s.texts.length > 0) {
-        const tableData = s.texts.map((t) => [t])
+        const tableData = s.texts.map((t) => [wrapLongTokens(String(t), 40)])
         autoTable(doc, {
           startY: y,
           head: [["Antworten"]],
@@ -893,6 +1107,38 @@ function exportToPDF(responses, questions, stats, surveyTitle) {
         y += 10
       }
     }
+  })
+
+  // Vollstaendige Rohdaten: eine Zeile pro Abgabe, alle Fragen (wie Excel)
+  const qHeaders = buildExportQuestionHeaders(questions).map((h) => wrapLongTokens(h, 24))
+  const tableHead = [["#", "Datum", ...qHeaders]]
+  const tableBody = responses.map((r, idx) => {
+    const datum = new Date(r.submitted_at).toLocaleDateString("de-DE", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    })
+    const cells = questions.map((q) => wrapLongTokens(formatAnswerForExport(r.answers?.[q.id]), 28))
+    return [String(responses.length - idx), datum, ...cells]
+  })
+
+  doc.addPage()
+  doc.setFontSize(14)
+  doc.setFont(undefined, "bold")
+  doc.text("Alle Einzelantworten (vollständig)", 14, 16)
+  doc.setFont(undefined, "normal")
+  doc.setFontSize(9)
+  autoTable(doc, {
+    startY: 22,
+    head: tableHead,
+    body: tableBody,
+    theme: "grid",
+    headStyles: { fillColor: [30, 30, 30], fontSize: 7, cellPadding: 1 },
+    bodyStyles: { fontSize: 7, cellPadding: 1 },
+    margin: { left: 14, right: 14 },
+    styles: { overflow: "linebreak", cellWidth: "auto" },
+    horizontalPageBreak: true,
+    horizontalPageBreakRepeat: [0, 1],
+    showHead: "everyPage",
   })
 
   doc.save(`${surveyTitle || "umfrage"}-export.pdf`)
@@ -939,6 +1185,8 @@ export default function AdminDashboard() {
   const [showAdminPicker, setShowAdminPicker] = useState(false)
   const [adminSearch, setAdminSearch] = useState("")
   const [confirmOwnerTransfer, setConfirmOwnerTransfer] = useState(null)
+  const [summarizeAiLoading, setSummarizeAiLoading] = useState(false)
+  const [summarizeAiError, setSummarizeAiError] = useState("")
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -961,9 +1209,15 @@ export default function AdminDashboard() {
   // 1. Load Surveys (only admin's surveys)
   const loadSurveys = useCallback(async () => {
     setLoadingSurveys(true)
-    const { data } = await getAdminSurveys()
-    setSurveys(data || [])
-    setLoadingSurveys(false)
+    try {
+      const { data } = await getAdminSurveys()
+      setSurveys(data || [])
+    } catch (error) {
+      console.error("Fehler beim Laden der Admin-Umfragen:", error)
+      setSurveys([])
+    } finally {
+      setLoadingSurveys(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -975,32 +1229,91 @@ export default function AdminDashboard() {
 
   // 2. Load Detail Data
   const loadSurveyData = useCallback(async () => {
-    if (!selectedSurvey) return
+    const sid = selectedSurvey?.id
+    if (!sid) return
     setLoading(true)
-    const [qRes, rRes, aRes, pRes] = await Promise.all([
-      getQuestions(selectedSurvey.id),
-      getResponses(selectedSurvey.id),
-      getSurveyAdmins(selectedSurvey.id),
-      getAllProfiles()
-    ])
-    setQuestions(qRes.data || [])
-    setResponses(rRes.data || [])
-    setAdmins(aRes.data || [])
-    setAllProfiles(pRes.data || [])
-    setLoading(false)
-  }, [selectedSurvey])
+    try {
+      const [qRes, rRes, aRes, pRes, listRes] = await Promise.all([
+        getQuestions(sid),
+        getResponses(sid),
+        getSurveyAdmins(sid),
+        getAllProfiles(),
+        getAdminSurveys(),
+      ])
+      setQuestions(qRes.data || [])
+      setResponses(rRes.data || [])
+      setAdmins(aRes.data || [])
+      setAllProfiles(pRes.data || [])
+      if (!listRes.error && Array.isArray(listRes.data)) {
+        const fresh = listRes.data.find((s) => s.id === sid)
+        if (fresh) {
+          setSelectedSurvey((prev) => {
+            if (!prev || prev.id !== sid) return prev
+            return { ...prev, ...fresh }
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Fehler beim Laden der Umfragedaten:", error)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedSurvey?.id])
 
   useEffect(() => {
-    if (selectedSurvey) {
-      loadSurveyData()
-    }
-  }, [selectedSurvey, loadSurveyData])
+    const sid = selectedSurvey?.id
+    if (!sid) return
+    loadSurveyData()
+    // Nur survey-Id: Nach Merge von getAdminSurveys wuerde sonst selectedSurvey-Referenz aendern und Endlosschleife entstehen.
+  }, [selectedSurvey?.id, loadSurveyData])
 
   // ─── Handlers ─────────────────
 
-  const handleSaveSurvey = async ({ title, description }) => {
+  const handleGenerateAISummary = async () => {
+    const sid = selectedSurvey?.id
+    if (!sid || responses.length === 0) return
+    setSummarizeAiError("")
+    setSummarizeAiLoading(true)
+    try {
+      const { session } = await getSession()
+      const token = session?.access_token
+      if (!token) {
+        setSummarizeAiError("Kein gueltiges Login-Token. Bitte neu anmelden.")
+        return
+      }
+      const res = await fetch("/api/ai/summarize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ surveyId: sid }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSummarizeAiError(typeof data.error === "string" ? data.error : `Fehler (${res.status})`)
+        return
+      }
+      setSelectedSurvey((prev) =>
+        prev && prev.id === sid
+          ? {
+            ...prev,
+            ai_summary: data.summary,
+            ai_summary_generated_at: data.generatedAt,
+            ai_summary_model: data.model,
+          }
+          : prev
+      )
+    } catch (e) {
+      setSummarizeAiError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSummarizeAiLoading(false)
+    }
+  }
+
+  const handleSaveSurvey = async ({ title, description, expires_at }) => {
     if (editingSurvey === "new") {
-      const { data: newSurvey } = await createSurvey(title, description)
+      const { data: newSurvey } = await createSurvey(title, description, expires_at ?? null)
       if (newSurvey) {
         await addCurrentUserAsSurveyAdmin(newSurvey.id)
         setEditingSurvey(null)
@@ -1099,14 +1412,19 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
-              {surveys.map((s) => (
-                <div key={s.id} className="relative group hover:shadow-lg transition-all rounded-2xl h-52">
+              {surveys.map((s) => {
+                const daysLeft = berlinDaysUntilExpiry(s.expires_at)
+                const expiredCal = s.expires_at && isSurveyExpired(s.expires_at)
+                const soon =
+                  s.expires_at && !expiredCal && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0
+                return (
+                <div key={s.id} className="relative group hover:shadow-lg transition-all rounded-2xl min-h-[13rem]">
                   <button
                     onClick={() => setSelectedSurvey(s)}
                     className="w-full h-full bg-white p-6 rounded-2xl border border-orendt-gray-200 hover:border-orendt-black transition-all text-left flex flex-col"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase ${
                             s.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
@@ -1114,18 +1432,39 @@ export default function AdminDashboard() {
                         >
                           {s.is_active ? "Aktiv" : "Inaktiv"}
                         </span>
+                        {soon && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase bg-amber-100 text-amber-800">
+                            Endet bald
+                          </span>
+                        )}
+                        {expiredCal && s.is_active && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded font-display uppercase bg-orange-100 text-orange-800">
+                            Abgelaufen
+                          </span>
+                        )}
                       </div>
                     </div>
                     <h3 className="font-display text-lg font-bold mb-1 max-w-[90%] truncate">{s.title}</h3>
                     <p className="text-sm text-orendt-gray-500 line-clamp-2 mb-4 flex-grow">
                       {s.description || "Keine Beschreibung"}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-orendt-gray-400 font-mono bg-orendt-gray-50 p-2 rounded w-fit mt-auto">
+                    <div className="mt-auto space-y-2 w-full">
+                    {s.expires_at && (
+                      <p className="text-[11px] text-orendt-gray-500">
+                        Laeuft bis{" "}
+                        <span className="font-semibold text-orendt-black">
+                          {formatExpiresAtLabel(s.expires_at)}
+                        </span>
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-orendt-gray-400 font-mono bg-orendt-gray-50 p-2 rounded w-fit">
                       /{s.slug}
+                    </div>
                     </div>
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </main>
@@ -1478,19 +1817,65 @@ export default function AdminDashboard() {
           />
         ) : (
           <div>
+            <div className="bg-white rounded-2xl border border-orendt-gray-200 p-6 mb-6">
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-orendt-black mb-1">KI-Zusammenfassung</h3>
+                  {(selectedSurvey?.ai_summary_model || selectedSurvey?.ai_summary_generated_at) && (
+                    <p className="text-[11px] text-orendt-gray-400 mt-2 font-display">
+                      {[
+                        selectedSurvey.ai_summary_model,
+                        selectedSurvey.ai_summary_generated_at &&
+                          `Generiert: ${new Date(selectedSurvey.ai_summary_generated_at).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateAISummary()}
+                  disabled={responses.length === 0 || summarizeAiLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orendt-black text-orendt-accent text-sm font-semibold font-display hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  {summarizeAiLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Wird erstellt…
+                    </span>
+                  ) : selectedSurvey?.ai_summary ? (
+                    "Neu generieren"
+                  ) : (
+                    "Zusammenfassung generieren"
+                  )}
+                </button>
+              </div>
+              {summarizeAiError && (
+                <p className="text-sm text-red-600 mb-3 font-body">{summarizeAiError}</p>
+              )}
+              {responses.length === 0 && (
+                <p className="text-xs text-orendt-gray-400 italic">Sobald Antworten vorliegen, kann die Zusammenfassung erstellt werden.</p>
+              )}
+              {typeof selectedSurvey?.ai_summary === "string" && selectedSurvey.ai_summary.trim() !== "" ? (
+                <div className="mt-4 max-h-[28rem] overflow-y-auto px-4 py-4 rounded-xl bg-orendt-gray-50 border border-orendt-gray-100 text-sm text-orendt-gray-800 whitespace-pre-wrap font-body leading-relaxed">
+                  {softenMarkdownLite(selectedSurvey.ai_summary)}
+                </div>
+              ) : responses.length > 0 && !summarizeAiLoading ? (
+                <p className="text-xs text-orendt-gray-400 mt-3">Noch keine Zusammenfassung gespeichert.</p>
+              ) : null}
+            </div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display text-xl font-bold">{responses.length} Antworten</h2>
               {responses.length > 0 && (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => exportToExcel(responses, questions, selectedSurvey.title)}
+                    onClick={() => exportToExcel(responses, questions, selectedSurvey)}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
                     Excel
                   </button>
                   <button
-                    onClick={() => exportToPDF(responses, questions, stats, selectedSurvey.title)}
+                    onClick={() => exportToPDF(responses, questions, stats, selectedSurvey)}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orendt-gray-200 text-sm font-semibold font-display text-orendt-gray-600 hover:bg-orendt-gray-50 transition-colors"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>

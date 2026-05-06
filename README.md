@@ -28,7 +28,7 @@ npm install
 ### 2. Supabase Projekt erstellen
 
 1. Erstelle ein Projekt auf [supabase.com](https://supabase.com)
-2. Öffne den SQL Editor und führe `lib/database.sql` aus
+2. Öffne den SQL Editor und führe `lib/database.sql` sowie die Dateien unter `lib/migrations/` aus (Reihenfolge nach Dateiname). Für automatisches Enddatum der Umfragen zusätzlich `lib/migrations/04_survey_expires_at.sql` (`expires_at` + optional `pg_cron`).
 3. Kopiere URL und Anon Key aus den Projekteinstellungen
 
 ### 3. Environment Variables
