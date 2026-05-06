@@ -556,23 +556,29 @@ export default function Survey({ slug }) {
               )}
             </div>
 
-            {/* Mobile: Logo → Button → Description | Desktop: Description | Button | Logo */}
-            <div className="flex flex-col items-center gap-5 md:flex-row md:items-center">
-              {/* Logo: top on mobile, right on desktop */}
-              <div className="md:order-3 md:flex-1 md:flex md:justify-end">
+            {/* Mobile: Logo → Button (zentriert) → Description | Desktop: 1fr / auto / 1fr — Button optisch mittig */}
+            <div className="flex flex-col items-center gap-5 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-x-6 md:gap-y-5">
+              {/* Logo: top on mobile, rechts auf Desktop */}
+              <div className="flex justify-center md:col-start-3 md:row-start-1 md:justify-self-end">
                 <OrendtLogo />
               </div>
 
-              {/* Button: middle on mobile, center on desktop */}
-              <div className="flex-shrink-0 w-full md:w-auto md:order-2">
+              {/* Button: zentriert */}
+              <div className="flex w-full shrink-0 justify-center md:col-start-2 md:row-start-1 md:w-auto md:justify-self-center">
                 <button
                   onClick={() => setStarted(true)}
-                  className="group w-full md:w-auto inline-flex items-center justify-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-4 md:py-5 rounded-full transition-transform duration-200 hover:scale-105 active:scale-95"
+                  className="group inline-flex items-center justify-center gap-4 bg-orendt-accent text-orendt-black font-display font-bold text-sm uppercase tracking-widest px-8 py-4 md:py-5 rounded-full transition-transform duration-200 hover:scale-105 active:scale-95"
                 >
                   <span>{btnLabel}</span>
                   <svg
-                    width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className="transition-transform duration-200 group-hover:translate-x-1"
                   >
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -580,9 +586,9 @@ export default function Survey({ slug }) {
                 </button>
               </div>
 
-              {/* Description: bottom on mobile, left on desktop */}
+              {/* Description: max-w-sm + 25% ≈ 30rem */}
               {descText && (
-                <p className="text-orendt-gray-400 font-body text-sm md:text-base leading-relaxed max-w-sm text-center md:text-left md:order-1 md:flex-1">
+                <p className="max-w-[30rem] text-center font-body text-sm leading-relaxed text-orendt-gray-400 md:col-start-1 md:row-start-1 md:justify-self-start md:text-left md:text-base">
                   {descText}
                 </p>
               )}
