@@ -374,12 +374,6 @@ export default function Survey({ slug }) {
     })
   }, [q])
 
-  const advancingRef = useRef(false)
-
-  useEffect(() => {
-    advancingRef.current = false
-  }, [currentQ])
-
   const canProceed = () => {
     if (!q) return false
     const a = answers[q.id]
@@ -430,46 +424,23 @@ export default function Survey({ slug }) {
     [answers, currentQ, questions.length, survey]
   )
 
-  /** Eine Auswahl (inkl. Ja/Nein): ein Klick übernimmt die Antwort und geht weiter. */
-  const pickSingleAndAdvance = useCallback(
-    (opt) => {
-      if (!q || q.type !== "single" || advancingRef.current || submitting) return
-      const nextAnswers = { ...answers, [q.id]: opt }
-      setAnswers(nextAnswers)
-      advancingRef.current = true
-      queueMicrotask(() => {
-        void goNext(nextAnswers)
-      })
-    },
-    [q, answers, submitting, goNext]
-  )
+  /** Einzelauswahl: nur Antwort setzen; Weiter erfolgt manuell per Button. */
+  const pickSingle = useCallback((opt) => {
+    if (!q || q.type !== "single") return
+    setAnswers((prev) => ({ ...prev, [q.id]: opt }))
+  }, [q])
 
-  /** Skala: nach vollständiger Bewertung aller Zeilen automatisch weiter. */
-  const pickRatingAndMaybeAdvance = useCallback(
+  /** Skala: nur Werte setzen; Weiter erfolgt manuell per Button. */
+  const setRating = useCallback(
     (item, val) => {
-      if (!q || q.type !== "rating" || advancingRef.current || submitting) return
-      const ratingItems = q.rating_items || []
-      const nextEntry = { ...(answers[q.id] || {}), [item]: val }
-      const nextAnswers = { ...answers, [q.id]: nextEntry }
-      setAnswers(nextAnswers)
-      const allFilled =
-        ratingItems.length > 0 &&
-        ratingItems.every((it) => nextEntry[it] != null && nextEntry[it] !== "")
-      if (!allFilled) return
-      advancingRef.current = true
-      queueMicrotask(() => {
-        void goNext(nextAnswers)
-      })
+      if (!q || q.type !== "rating") return
+      setAnswers((prev) => ({
+        ...prev,
+        [q.id]: { ...(prev[q.id] || {}), [item]: val },
+      }))
     },
-    [q, answers, submitting, goNext]
+    [q]
   )
-
-  const showManualNextButton =
-    q &&
-    (q.type === "multiple" ||
-      q.type === "text" ||
-      (q.type === "single" && !q.is_required) ||
-      (q.type === "rating" && !q.is_required))
 
   const goBack = () => {
     if (currentQ > 0) {
@@ -681,7 +652,7 @@ export default function Survey({ slug }) {
                   key={opt}
                   index={i}
                   selected={answers[q.id] === opt}
-                  onClick={() => pickSingleAndAdvance(opt)}
+                  onClick={() => pickSingle(opt)}
                 >
                   {opt}
                 </OptionButton>
@@ -712,7 +683,7 @@ export default function Survey({ slug }) {
                   label={item}
                   index={i}
                   value={(answers[q.id] || {})[item]}
-                  onChange={(val) => pickRatingAndMaybeAdvance(item, val)}
+                  onChange={(val) => setRating(item, val)}
                 />
               ))}
             </div>
@@ -726,10 +697,8 @@ export default function Survey({ slug }) {
             />
           )}
 
-          {/* Navigation — Weiter nur wenn nötig (Mehrfachauswahl, Text, optionale Einzel-/Rating-Fragen) */}
-          <div
-            className={`mt-10 flex items-center ${showManualNextButton ? "justify-between" : "justify-start"}`}
-          >
+          {/* Navigation — Weiter immer manuell (kein Auto-Advance) */}
+          <div className="mt-10 flex items-center justify-between">
             <button
               onClick={goBack}
               disabled={currentQ === 0}
@@ -749,12 +718,11 @@ export default function Survey({ slug }) {
               Zurück
             </button>
 
-            {showManualNextButton && (
-              <button
-                type="button"
-                onClick={() => void goNext()}
-                disabled={!canProceed() || submitting}
-                className={`
+            <button
+              type="button"
+              onClick={() => void goNext()}
+              disabled={!canProceed() || submitting}
+              className={`
                   flex min-h-[44px] items-center gap-2 px-6 py-3 rounded-xl font-display font-semibold text-sm
                   tracking-wide transition-all duration-200 border-0
                   ${canProceed()
@@ -762,20 +730,19 @@ export default function Survey({ slug }) {
                     : "bg-orendt-gray-200 text-orendt-gray-600 cursor-not-allowed"
                   }
                 `}
-              >
-                {submitting ? (
-                  <div className="w-4 h-4 border-2 border-orendt-accent/30 border-t-orendt-accent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    {currentQ === questions.length - 1 ? "Absenden" : "Weiter"}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            )}
+            >
+              {submitting ? (
+                <div className="w-4 h-4 border-2 border-orendt-accent/30 border-t-orendt-accent rounded-full animate-spin" />
+              ) : (
+                <>
+                  {currentQ === questions.length - 1 ? "Absenden" : "Weiter"}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </>
+              )}
+            </button>
           </div>
 
           <div className="mt-10 flex justify-center border-t border-orendt-gray-100 pt-6">
