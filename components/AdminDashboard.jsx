@@ -1140,42 +1140,55 @@ function exportToPDF(responses, questions, stats, survey) {
     }
   })
 
-  // Vollstaendige Rohdaten: eine Zeile pro Abgabe, alle Fragen (wie Excel)
-  const qHeaders = buildExportQuestionHeaders(questions).map((h) => wrapLongTokens(h, 24))
-  const tableHead = [["#", "Datum", ...qHeaders]]
-  const tableBody = responses.map((r, idx) => {
-    const datum = new Date(r.submitted_at).toLocaleDateString("de-DE", {
+  // Einzelantworten: pro Frage eine volle Breite-Tabelle (gleiches Layout wie Zusammenfassungen)
+  const rawColIndex = 14
+  const rawColDate = 38
+  const formatResponseDate = (submittedAt) =>
+    new Date(submittedAt).toLocaleDateString("de-DE", {
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
     })
-    const cells = questions.map((q) => wrapLongTokens(formatAnswerForExport(r.answers?.[q.id]), 28))
-    return [String(responses.length - idx), datum, ...cells]
-  })
 
   doc.addPage()
   doc.setFontSize(14)
   doc.setFont(undefined, "bold")
   doc.text("Alle Einzelantworten (vollständig)", 14, 16)
   doc.setFont(undefined, "normal")
-  doc.setFontSize(9)
-  const rawColIndex = 14
-  const rawColDate = 38
-  autoTable(doc, {
-    ...PDF_TABLE_BASE,
-    startY: 22,
-    head: tableHead,
-    body: tableBody,
-    tableWidth,
-    columnStyles: buildPdfColumnStyles(
+
+  let yRaw = 28
+
+  questions.forEach((q) => {
+    if (yRaw > doc.internal.pageSize.getHeight() - 50) {
+      doc.addPage()
+      yRaw = 20
+    }
+
+    doc.setFontSize(11)
+    doc.setFont(undefined, "bold")
+    const qLines = doc.splitTextToSize(`${q.category} — ${q.question}`, pageWidth - 28)
+    doc.text(qLines, 14, yRaw)
+    yRaw += qLines.length * 6 + 4
+
+    doc.setFont(undefined, "normal")
+    doc.setFontSize(9)
+
+    const tableData = responses.map((r, idx) => [
+      String(responses.length - idx),
+      formatResponseDate(r.submitted_at),
+      wrapLongTokens(formatAnswerForExport(r.answers?.[q.id]) || "—", 40),
+    ])
+
+    autoTable(doc, {
+      ...PDF_TABLE_BASE,
+      startY: yRaw,
+      head: [["#", "Datum", "Antwort"]],
+      body: tableData,
       tableWidth,
-      [rawColIndex, rawColDate],
-      questions.length,
-    ),
-    headStyles: { fillColor: [30, 30, 30], fontSize: 7, cellPadding: 1, overflow: "linebreak" },
-    bodyStyles: { fontSize: 7, cellPadding: 1, valign: "top" },
-    horizontalPageBreak: true,
-    horizontalPageBreakRepeat: [0, 1],
-    showHead: "everyPage",
+      columnStyles: buildPdfColumnStyles(tableWidth, [rawColIndex, rawColDate], 1),
+      headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
+      bodyStyles: { fontSize: 8, valign: "top" },
+    })
+    yRaw = doc.lastAutoTable.finalY + 12
   })
 
   doc.save(`${surveyTitle || "umfrage"}-export.pdf`)
