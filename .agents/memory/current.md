@@ -2,16 +2,16 @@
 
 ## Letzte Änderungen
 
-- Auto-Advance bei Single-Choice und Rating entfernt; Nutzer bestätigen mit **Weiter** / **Absenden** ([components/Survey.jsx](components/Survey.jsx)).
+- Migration `03_ai_summary` in Supabase (OSHH) angewendet: Spalten `ai_summary`, `ai_summary_generated_at`, `ai_summary_model` auf `surveys`.
 
 ## Fokus
 
-- Stabile, vorhersehbare Umfrage-Navigation (kein sofortiger Fragenwechsel nach Klick).
+- KI-Zusammenfassung im Admin-Dashboard testen.
 
 ## Nächste Schritte
 
-- Ggf. UX-Feedback einholen (optional: kurze Verzögerung oder Einstellung pro Umfrage).
+- „KI-Zusammenfassung generieren“ erneut ausführen und PDF/Excel-Export prüfen.
 
 ## Offene Punkte
 
-- Keine technischen offenen Punkte aus diesem Change.
+- API-Keys (`ANTHROPIC_*` / `OPENAI_*`) müssen in `.env.local` gesetzt sein, sonst schlägt die Generierung fehl.
