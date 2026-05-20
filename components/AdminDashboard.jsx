@@ -790,6 +790,38 @@ function wrapLongTokens(text, chunkSize = 30) {
     .join(" ")
 }
 
+const PDF_MARGIN = { left: 14, right: 14 }
+
+function getPdfTableWidth(doc) {
+  return doc.internal.pageSize.getWidth() - PDF_MARGIN.left - PDF_MARGIN.right
+}
+
+/** autoTable: feste Tabellenbreite + explizite Spaltenbreiten (sonst laeuft Text rechts raus). */
+function buildPdfColumnStyles(tableWidth, fixedPrefixWidths, flexibleColumnCount) {
+  const used = fixedPrefixWidths.reduce((sum, w) => sum + w, 0)
+  const flexibleWidth = Math.max(tableWidth - used, 24)
+  const perFlexible =
+    flexibleColumnCount > 0 ? flexibleWidth / flexibleColumnCount : flexibleWidth
+  const columnStyles = {}
+  let col = 0
+  fixedPrefixWidths.forEach((w) => {
+    columnStyles[col] = { cellWidth: w, overflow: "linebreak" }
+    col += 1
+  })
+  for (let i = 0; i < flexibleColumnCount; i += 1) {
+    columnStyles[col] = { cellWidth: perFlexible, overflow: "linebreak" }
+    col += 1
+  }
+  return columnStyles
+}
+
+const PDF_TABLE_BASE = {
+  theme: "grid",
+  margin: PDF_MARGIN,
+  styles: { overflow: "linebreak", cellPadding: 2, valign: "top" },
+  bodyStyles: { valign: "top" },
+}
+
 /** Einheitliche Textdarstellung fuer Excel/PDF (alle Antwort-Typen). */
 function formatAnswerForExport(val) {
   if (val == null) return ""
@@ -979,6 +1011,7 @@ function exportToExcel(responses, questions, survey) {
 function exportToPDF(responses, questions, stats, survey) {
   const doc = new jsPDF({ orientation: "landscape" })
   const pageWidth = doc.internal.pageSize.getWidth()
+  const tableWidth = getPdfTableWidth(doc)
   const surveyTitle = survey?.title || "Umfrage-Ergebnisse"
   const pageBottom = () => doc.internal.pageSize.getHeight() - 14
 
@@ -1063,43 +1096,41 @@ function exportToPDF(responses, questions, stats, survey) {
           s.total > 0 ? `${((count / s.total) * 100).toFixed(0)}%` : "0%",
         ])
       autoTable(doc, {
+        ...PDF_TABLE_BASE,
         startY: y,
         head: [["Option", "Anzahl", "Anteil"]],
         body: tableData,
-        theme: "grid",
+        tableWidth,
+        columnStyles: buildPdfColumnStyles(tableWidth, [], 3),
         headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
-        margin: { left: 14, right: 14 },
-        tableWidth: "auto",
-        styles: { overflow: "linebreak", cellWidth: "auto" },
+        bodyStyles: { fontSize: 8, valign: "top" },
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (s.type === "rating") {
       const tableData = Object.entries(s.avgs).map(([item, avg]) => [wrapLongTokens(item, 28), `${avg} / 5`])
       autoTable(doc, {
+        ...PDF_TABLE_BASE,
         startY: y,
         head: [["Kriterium", "Durchschnitt"]],
         body: tableData,
-        theme: "grid",
+        tableWidth,
+        columnStyles: buildPdfColumnStyles(tableWidth, [], 2),
         headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
-        margin: { left: 14, right: 14 },
-        tableWidth: "auto",
-        styles: { overflow: "linebreak", cellWidth: "auto" },
+        bodyStyles: { fontSize: 8, valign: "top" },
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (s.type === "text") {
       if (s.texts.length > 0) {
         const tableData = s.texts.map((t) => [wrapLongTokens(String(t), 40)])
         autoTable(doc, {
+          ...PDF_TABLE_BASE,
           startY: y,
           head: [["Antworten"]],
           body: tableData,
-          theme: "grid",
+          tableWidth,
+          columnStyles: buildPdfColumnStyles(tableWidth, [], 1),
           headStyles: { fillColor: [30, 30, 30], fontSize: 8 },
-          bodyStyles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-          columnStyles: { 0: { cellWidth: "auto" } },
+          bodyStyles: { fontSize: 8, valign: "top" },
         })
         y = doc.lastAutoTable.finalY + 10
       } else {
@@ -1127,15 +1158,21 @@ function exportToPDF(responses, questions, stats, survey) {
   doc.text("Alle Einzelantworten (vollständig)", 14, 16)
   doc.setFont(undefined, "normal")
   doc.setFontSize(9)
+  const rawColIndex = 14
+  const rawColDate = 38
   autoTable(doc, {
+    ...PDF_TABLE_BASE,
     startY: 22,
     head: tableHead,
     body: tableBody,
-    theme: "grid",
-    headStyles: { fillColor: [30, 30, 30], fontSize: 7, cellPadding: 1 },
-    bodyStyles: { fontSize: 7, cellPadding: 1 },
-    margin: { left: 14, right: 14 },
-    styles: { overflow: "linebreak", cellWidth: "auto" },
+    tableWidth,
+    columnStyles: buildPdfColumnStyles(
+      tableWidth,
+      [rawColIndex, rawColDate],
+      questions.length,
+    ),
+    headStyles: { fillColor: [30, 30, 30], fontSize: 7, cellPadding: 1, overflow: "linebreak" },
+    bodyStyles: { fontSize: 7, cellPadding: 1, valign: "top" },
     horizontalPageBreak: true,
     horizontalPageBreakRepeat: [0, 1],
     showHead: "everyPage",
